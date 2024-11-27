@@ -1,79 +1,8 @@
-use std::{ops::{Deref, DerefMut, Index, IndexMut}, slice::Iter};
+use std::ops::{Index, IndexMut};
 
-use bevy::{prelude::MeshBuilder, render::{mesh::Indices, render_asset::RenderAssetUsages}, utils::hashbrown::HashMap};
+use bevy::{prelude::MeshBuilder, render::{mesh::Indices, render_asset::RenderAssetUsages}};
 
-#[derive(Debug, thiserror::Error)]
-pub enum MeshError {
-    #[error("The requested node '{label}' does not exist. The requsted index was {index}")]
-    NodeDoesNotExit { label: &'static str, index: MeshNodeIndex },
-    #[error("The requested edge '{label}' does not exist. The requsted index was {index}")]
-    EdgeDoesNotExit { label: &'static str, index: MeshEdgeIndex }
-}
-
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MeshNodeIndex(usize);
-
-impl std::fmt::Display for MeshNodeIndex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Node index: {}", self.0)
-    }
-}
-
-impl Deref for MeshNodeIndex {
-    type Target = usize;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for MeshNodeIndex {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MeshEdgeIndex(usize);
-
-impl std::fmt::Display for MeshEdgeIndex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Edge index: {}", self.0)
-    }
-}
-impl Deref for MeshEdgeIndex {
-    type Target = usize;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for MeshEdgeIndex {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MeshTriangleIndex(usize);
-
-impl std::fmt::Display for MeshTriangleIndex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Triangle index: {}", self.0)
-    }
-}
-impl Deref for MeshTriangleIndex {
-    type Target = usize;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for MeshTriangleIndex {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
+use super::{MeshEdgeIndex, MeshError, MeshNodeIndex, MeshTriangleIndex};
 
 // Vec of EdgeIndex -> No sorting, shuffling, preallocation of array, but bad cache effiency.
 // Array start + length -> Good cache effiency, but preallocation and relocation needed.
@@ -103,51 +32,43 @@ pub struct MeshTriangle {
     pub corners: [MeshNodeIndex; 3],
 }
 
-pub struct MyMesh {
+#[derive(Default)]
+pub struct Mesh {
     pub nodes: Vec<Option<MeshNode>>,
     edges: Vec<Option<MeshEdge>>, 
     pub triangles: Vec<Option<MeshTriangle>>
 }
 
-impl Default for MyMesh {
-    fn default() -> Self {
-        Self {
-            nodes: vec![],
-            edges: vec![],
-            triangles: vec![]
-        }    
-    }
-}
 
-impl Index<MeshNodeIndex> for MyMesh {
+impl Index<MeshNodeIndex> for Mesh {
     type Output = Option<MeshNode>;
 
     fn index(&self, index: MeshNodeIndex) -> &Self::Output {
-        &self.nodes[index.0]
+        &self.nodes[*index]
     }
 }
 
-impl IndexMut<MeshNodeIndex> for MyMesh {
+impl IndexMut<MeshNodeIndex> for Mesh {
     fn index_mut(&mut self, index: MeshNodeIndex) -> &mut Self::Output {
-        &mut self.nodes[index.0]
+        &mut self.nodes[*index]
     }
 }
 
-impl Index<MeshEdgeIndex> for MyMesh {
+impl Index<MeshEdgeIndex> for Mesh {
     type Output = Option<MeshEdge>;
 
     fn index(&self, index: MeshEdgeIndex) -> &Self::Output {
-        &self.edges[index.0]
+        &self.edges[*index]
     }
 }
 
-impl IndexMut<MeshEdgeIndex> for MyMesh {
+impl IndexMut<MeshEdgeIndex> for Mesh {
     fn index_mut(&mut self, index: MeshEdgeIndex) -> &mut Self::Output {
-        &mut self.edges[index.0]
+        &mut self.edges[*index]
     }
 }
 
-impl MyMesh {
+impl Mesh {
     pub fn add_node(&mut self, node: MeshNode) -> MeshNodeIndex {
         self.nodes.push(Some(node));
         MeshNodeIndex(self.nodes.len() - 1)
@@ -240,8 +161,8 @@ impl MyMesh {
         self.check_edges_exist([("a->b", ab), ("b->c", bc), ("c->a", ca)])?;
         let tri_idx = MeshTriangleIndex(self.triangles.len() + 1);
         let corners = [ab,bc,ca].map(|edge| {
-            let edge = self[edge.clone()].as_mut().unwrap();
-            (*edge).triangle = Some(tri_idx);
+            let edge = self[edge].as_mut().unwrap();
+            edge.triangle = Some(tri_idx);
             edge.source
         });
         self.triangles.push(Some(MeshTriangle { 
@@ -249,17 +170,9 @@ impl MyMesh {
         }));
         Ok(tri_idx)
     }
-
-    // pub fn cleanup(&self) -> Self {
-    //     let nodes: Vec<MeshNode> = self.nodes;
-    //     let edges: Vec<MeshEdge> = Vec::with_capacity(self.edges.len());
-    //     let triangles: Vec<MeshTriangle> = Vec::with_capacity(self.triangles.len());
-
-    //     let mut node_transformations: Vec<MeshNodeIndex> = Vec::with_capacity(self.nodes.len());
-    // }
 }
 
-impl MeshBuilder for MyMesh {
+impl MeshBuilder for Mesh {
     fn build(&self) -> bevy::prelude::Mesh {
         println!("edges: {}", self.edges.iter().map(|e| format!("{}->{}, tri: {:?}", e.clone().unwrap().source.0, e.clone().unwrap().target.0, e.clone().unwrap().triangle)).collect::<Vec<String>>().join("\n"));
 
@@ -274,7 +187,7 @@ impl MeshBuilder for MyMesh {
                         transformations[i] = transform(i);
                     },
                     None => {
-                        while let None = items[j] {
+                        while items[j].is_none() {
                             j -= 1
                         } 
                         _items.push(items[j].clone().unwrap());
@@ -287,9 +200,9 @@ impl MeshBuilder for MyMesh {
             (_items, transformations)
         }
 
-        let (mut nodes, node_transformations) = relocate(&self.nodes, |i| MeshNodeIndex(i));
-        let (mut edges, edge_transformations) = relocate(&self.edges, |i| MeshEdgeIndex(i));
-        let (mut triangles, triangle_transformations) = relocate(&self.triangles, |i| MeshTriangleIndex(i));
+        let (mut nodes, node_transformations) = relocate(&self.nodes, MeshNodeIndex);
+        let (mut edges, edge_transformations) = relocate(&self.edges, MeshEdgeIndex);
+        let (triangles, triangle_transformations) = relocate(&self.triangles, MeshTriangleIndex);
 
         // println!("original: {:#?}", self.triangles.clone());
         // println!("relocated: {:#?}", triangles.clone());

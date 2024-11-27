@@ -1,3 +1,3 @@
 
 pub mod mesh;
-pub use mesh::MyMesh;
+pub use mesh::Mesh;

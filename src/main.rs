@@ -1,6 +1,7 @@
-use ba::{mesh::MeshNode, MyMesh};
-use bevy::{app::{App, Startup}, prelude::Commands, render::{mesh::Indices, render_asset::RenderAssetUsages}, DefaultPlugins};
+use ba::{mesh::MeshNode, Mesh};
+use bevy::{app::{App, Startup}, prelude::Commands, DefaultPlugins};
 use bevy::prelude::*;
+use bevy::prelude::Mesh as BMesh;
 
 
 fn main() {
@@ -18,8 +19,8 @@ fn main() {
 // check out examples/input/ for more examples about user input.
 fn input_handler(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mesh_query: Query<&Handle<Mesh>, ()>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    mesh_query: Query<&Handle<BMesh>, ()>,
+    meshes: ResMut<Assets<BMesh>>,
     mut query: Query<&mut Transform, ()>,
     time: Res<Time>,
 ) {
@@ -49,11 +50,11 @@ fn input_handler(
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<bevy::prelude::Mesh>>,
 ) {
     
-    let mut mesh = MyMesh::default();
+    let mut mesh = Mesh::default();
     
     let nodes: Vec<_> = vec![
         [1.0f32,1.0f32,1.0f32],
