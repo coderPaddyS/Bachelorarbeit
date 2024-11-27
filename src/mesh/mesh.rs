@@ -227,3 +227,45 @@ impl MeshBuilder for Mesh {
 
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_cube_triangle_nodes() {
+        let mut mesh = Mesh::default();
+        
+        let nodes: Vec<_> = vec![
+            [1.0f32,1.0f32,1.0f32],
+            [1.0f32,1.0f32,-1.0f32],
+            [1.0f32,-1.0f32,1.0f32],
+            [1.0f32,-1.0f32,-1.0f32],
+            [-1.0f32,1.0f32,1.0f32],
+            [-1.0f32,1.0f32,-1.0f32],
+            [-1.0f32,-1.0f32,1.0f32],
+            [-1.0f32,-1.0f32,-1.0f32],
+        ].into_iter().map(|node| {
+            mesh.add_node(MeshNode::new(node))
+        }).collect();
+
+        vec![
+            [0, 1, 2], [2, 1, 3],
+            [1, 0, 5], [5, 0, 4],
+            [0, 2, 4], [2, 6, 4],
+            [4, 6, 5], [5, 6, 7],
+            [2, 3, 6], [3, 7, 6],
+            [3, 1, 7], [1, 5, 7]
+        ].into_iter()
+            .for_each(|[a,b,c]| { 
+                mesh.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap(); 
+            });
+
+        assert_eq!(8, mesh.nodes.len());
+        assert!(mesh.nodes.iter().filter(|node| node.is_none()).collect::<Vec<_>>().is_empty());
+        assert_eq!(36, mesh.edges.len());
+        assert!(mesh.edges.iter().filter(|edge| edge.is_none()).collect::<Vec<_>>().is_empty());
+        assert_eq!(12, mesh.triangles.len());
+        assert!(mesh.edges.iter().filter(|edge| edge.as_ref().unwrap().triangle.is_none()).collect::<Vec<_>>().is_empty())
+    }
+}

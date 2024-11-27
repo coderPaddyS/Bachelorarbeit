@@ -68,7 +68,6 @@ fn setup(
     ].into_iter().map(|node| {
         mesh.add_node(MeshNode::new(node))
     }).collect();
-    println!("{nodes:#?}");
     vec![
         [0, 1, 2], [2, 1, 3],
         [1, 0, 5], [5, 0, 4],
