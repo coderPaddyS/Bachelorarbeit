@@ -1,7 +1,8 @@
 use std::ops::{Index, IndexMut};
 
-use bevy::{log::error, prelude::MeshBuilder, render::{mesh::Indices, render_asset::RenderAssetUsages}};
+use bevy::{color::{Color, ColorToComponents}, log::error, prelude::MeshBuilder, render::{mesh::Indices, render_asset::RenderAssetUsages}};
 use log::{debug, info};
+use nalgebra::Vector3;
 
 use super::{MeshEdgeIndex, MeshError, MeshNodeIndex, MeshTriangleIndex};
 
@@ -203,6 +204,34 @@ impl Mesh {
         }));
         Ok(tri_idx)
     }
+
+    pub fn build_many(&self) -> Vec<bevy::prelude::Mesh> {
+        self.triangles.iter().filter_map(|tri| {
+            match tri {
+                None => None,
+                Some(tri) => {
+                    let color = Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4();
+                    let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
+                    let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
+                    let (normal, inv_normal) = (normal.data.0[0], (normal * -1.0).data.0[0]);
+
+                    Some(
+                        bevy::prelude::Mesh::new(
+                            bevy::render::mesh::PrimitiveTopology::TriangleList,
+                            RenderAssetUsages::default()
+                        ).with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, vec![nodes.clone(), nodes].into_iter().flatten().collect::<Vec<_>>())
+                        .with_inserted_indices(Indices::U32([0,1,2,3,4,5].to_vec()))
+                        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, vec![color, color, color])
+                        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_NORMAL, [[normal; 3].to_vec(), [inv_normal; 3].to_vec()].into_iter().flatten().collect::<Vec<_>>())
+                    )
+                }
+            }
+            // .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, tri.corners.into_iter().map(|n| n.coordinates).collect::<Vec<_>>())
+            // .with_inserted_indices(Indices::U32(triangles.into_iter().flat_map(|tri| tri.corners).map(|i| i.0 as u32).collect()))
+            // // .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
+            // .with_computed_smooth_normals()
+        }).collect()
+    }
 }
 
 impl MeshBuilder for Mesh {
@@ -256,11 +285,26 @@ impl MeshBuilder for Mesh {
             (b - a).cross(&(c - a)).into()
         }).collect::<Vec<_>>();
 
+        let mut palette: [u8; 32] = [
+            255, 102, 159, 255, 255, 159, 102, 255, 236, 255, 102, 255, 121, 255, 102, 255, 102, 255,
+            198, 255, 102, 198, 255, 255, 121, 102, 255, 255, 236, 102, 255, 255,
+        ];
+
+        // let nodes = nodes.into_iter().map(|n| n.coordinates).collect::<Vec<_>>();
+        // let colors = 
+
+        // let triangles = triangles.into_iter().flat_map(|tri| tri.corners).map(|i| [i.0 as u32, (i.0 + nodes.len()) as u32]).flatten().collect();
+        // let nodes = [nodes.clone(), nodes].concat();
+
+
+        let colors: Vec<_> = (0..triangles.len()).map(|_| Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4()).collect();
+
         bevy::prelude::Mesh::new(
             bevy::render::mesh::PrimitiveTopology::TriangleList,
             RenderAssetUsages::default()
         ).with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes.into_iter().map(|n| n.coordinates).collect::<Vec<_>>())
         .with_inserted_indices(Indices::U32(triangles.into_iter().flat_map(|tri| tri.corners).map(|i| i.0 as u32).collect()))
+        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
         .with_computed_smooth_normals()
 
 
