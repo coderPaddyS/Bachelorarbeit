@@ -1,6 +1,7 @@
 use std::ops::{Index, IndexMut};
 
-use bevy::{prelude::MeshBuilder, render::{mesh::Indices, render_asset::RenderAssetUsages}};
+use bevy::{log::error, prelude::MeshBuilder, render::{mesh::Indices, render_asset::RenderAssetUsages}};
+use log::{debug, info};
 
 use super::{MeshEdgeIndex, MeshError, MeshNodeIndex, MeshTriangleIndex};
 
@@ -105,6 +106,8 @@ impl Mesh {
 
         self[a].as_mut().unwrap().outgoing.push(idx_ab);
         self[b].as_mut().unwrap().outgoing.push(idx_ba);
+
+        info!("Successfully created edges {a}<->{b} with indeces ->{idx_ab} and <-{idx_ba}");
         Ok((idx_ab, idx_ba))
     }
 
@@ -117,9 +120,12 @@ impl Mesh {
     }
 
     // TODO: correct error type
-    fn check_nodes_exist<I: IntoIterator<Item = (&'static str, MeshNodeIndex)>>(&self, nodes: I) -> Result<(), MeshError> {
+    fn check_nodes_exist<I: IntoIterator<Item = (&'static str, MeshNodeIndex)> + std::fmt::Debug>(&self, nodes: I) -> Result<(), MeshError> {
+        debug!(nodes:?; "Checking if nodes exist");
         nodes.into_iter().try_for_each(|(name, node)| {
             if !self.has_node(node) {
+                error!("Node {node} does not exist!");
+                debug!("Nodes: {:?}", self.nodes);
                 Err(MeshError::NodeDoesNotExit { label: name, index: node })
             } else {
                 Ok(())
@@ -147,15 +153,32 @@ impl Mesh {
     }
 
     pub fn add_triangle_by_nodes(&mut self, a: MeshNodeIndex, b: MeshNodeIndex, c: MeshNodeIndex) -> Result<MeshTriangleIndex, MeshError> {
-        println!("a: {a}, b: {b}, c: {c}");
+        info!("Adding triangle with nodes: a: {a}, b: {b}, c: {c}");
         self.check_nodes_exist([("a", a), ("b", b), ("c", c)])?;
         let tri_idx = MeshTriangleIndex(self.triangles.len());
         self.triangles.push(Some(MeshTriangle { corners: [a,b,c] }));
 
-        let edges = [(a,b), (b,c), (c,a)].try_map(|(s,t)| {
+        let invert = [(a,b), (b,c), (c,a)].iter().any(|(s,t)| {
+            match self[*s].as_ref().unwrap().outgoing.iter().find(|node| self[**node].as_ref().unwrap().target == *t) {
+                Some(&edge) => self[edge].as_ref().unwrap().triangle.is_some(),
+                None => false
+            }
+        });
+
+        let cycle = if invert {
+            info!("triangle {a}->{b}->{c} is out of order. using {a}->{c}->{b}.");
+            [(a,c), (c,b), (b,a)]
+        } else {
+            [(a,b), (b,c), (c,a)]
+        };
+
+        let edges = cycle.try_map(|(s,t)| {
             match self[s].as_ref().unwrap().outgoing.iter().find(|node| self[**node].as_ref().unwrap().target == t) {
                 Some(&edge) => Ok(edge),
-                None => self.add_edges(s, t).map(|(s,_)| s),
+                None => {
+                    info!("edge {s}->{t} not found in mesh. Attempting to create it.");
+                    self.add_edges(s, t).map(|(s,_)| s)
+                },
             }
         })?;
         for idx in 0..edges.len() {
@@ -184,7 +207,7 @@ impl Mesh {
 
 impl MeshBuilder for Mesh {
     fn build(&self) -> bevy::prelude::Mesh {
-        println!("edges: {}", self.edges.iter().map(|e| format!("{}->{}, tri: {:?}", e.clone().unwrap().source.0, e.clone().unwrap().target.0, e.clone().unwrap().triangle)).collect::<Vec<String>>().join("\n"));
+        println!("edges: \t{}", self.edges.iter().map(|e| format!("{}->{}, tri: {:?}", e.clone().unwrap().source.0, e.clone().unwrap().target.0, e.clone().unwrap().triangle)).collect::<Vec<String>>().join("\n\t"));
 
         fn relocate<T: Clone,I,F: Fn(usize) -> I>(items: &Vec<Option<T>>, transform: F) -> (Vec<T>, Vec<I>) {
             let mut _items: Vec<T> = Vec::with_capacity(items.len());
@@ -272,6 +295,43 @@ mod tests {
             [4, 6, 5], [5, 6, 7],
             [2, 3, 6], [3, 7, 6],
             [3, 1, 7], [1, 5, 7]
+        ].into_iter()
+            .for_each(|[a,b,c]| { 
+                mesh.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap(); 
+            });
+
+        assert_eq!(8, mesh.nodes.len());
+        assert!(mesh.nodes.iter().filter(|node| node.is_none()).collect::<Vec<_>>().is_empty());
+        assert_eq!(36, mesh.edges.len());
+        assert!(mesh.edges.iter().filter(|edge| edge.is_none()).collect::<Vec<_>>().is_empty());
+        assert_eq!(12, mesh.triangles.len());
+        assert!(mesh.edges.iter().filter(|edge| edge.as_ref().unwrap().triangle.is_none()).collect::<Vec<_>>().is_empty())
+    }
+
+    #[test]
+    fn simple_cube_triangle_nodes_false_order() {
+        let mut mesh = Mesh::default();
+        
+        let nodes: Vec<_> = vec![
+            [1.0f32,1.0f32,1.0f32],
+            [1.0f32,1.0f32,-1.0f32],
+            [1.0f32,-1.0f32,1.0f32],
+            [1.0f32,-1.0f32,-1.0f32],
+            [-1.0f32,1.0f32,1.0f32],
+            [-1.0f32,1.0f32,-1.0f32],
+            [-1.0f32,-1.0f32,1.0f32],
+            [-1.0f32,-1.0f32,-1.0f32],
+        ].into_iter().map(|node| {
+            mesh.add_node(MeshNode::new(node))
+        }).collect();
+
+        vec![
+            [0, 1, 2], [2, 1, 3],
+            [1, 5, 0], [5, 4, 0], // out of order
+            [0, 2, 4], [2, 6, 4],
+            [4, 6, 5], [5, 6, 7],
+            [2, 6, 3], [3, 7, 6], // out of order
+            [3, 1, 7], [1, 7, 5]  // out of order
         ].into_iter()
             .for_each(|[a,b,c]| { 
                 mesh.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap(); 
