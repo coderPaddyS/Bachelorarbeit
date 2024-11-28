@@ -24,6 +24,8 @@ pub struct MeshEdge {
     pub source: MeshNodeIndex,
     pub target: MeshNodeIndex,
     pub opposite: MeshEdgeIndex,
+    pub previous: Option<MeshEdgeIndex>,
+    pub next: Option<MeshEdgeIndex>,
     pub triangle: Option<MeshTriangleIndex>,
 }
 
@@ -86,13 +88,17 @@ impl Mesh {
             source: a,
             target: b,
             opposite: idx_ba,
-            triangle: None
+            triangle: None,
+            next: None,
+            previous: None
         };
         let edge_ba = MeshEdge {
             source: b,
             target: a,
             opposite: idx_ab,
-            triangle: None
+            triangle: None,
+            next: None,
+            previous: None
         };
         self.edges.push(Some(edge_ab));
         self.edges.push(Some(edge_ba));
@@ -146,12 +152,16 @@ impl Mesh {
         let tri_idx = MeshTriangleIndex(self.triangles.len());
         self.triangles.push(Some(MeshTriangle { corners: [a,b,c] }));
 
-        for (s,t) in  [(a,b),(b,c),(c,a)] {
-            let idx = match self[s].as_ref().unwrap().outgoing.iter().find(|node| self[**node].as_ref().unwrap().target == t) {
-                Some(&edge) => edge,
-                None => self.add_edges(s, t)?.0,
-            };
-            self[idx].as_mut().unwrap().triangle = Some(tri_idx)
+        let edges = [(a,b), (b,c), (c,a)].try_map(|(s,t)| {
+            match self[s].as_ref().unwrap().outgoing.iter().find(|node| self[**node].as_ref().unwrap().target == t) {
+                Some(&edge) => Ok(edge),
+                None => self.add_edges(s, t).map(|(s,_)| s),
+            }
+        })?;
+        for idx in 0..edges.len() {
+            self[edges[(idx + 1) % 3]].as_mut().unwrap().previous = Some(edges[idx]);
+            self[edges[idx]].as_mut().unwrap().next = Some(edges[(idx +1) % 3]);
+            self[edges[idx]].as_mut().unwrap().triangle = Some(tri_idx);
         }
 
         Ok(tri_idx)
@@ -218,11 +228,17 @@ impl MeshBuilder for Mesh {
             edges[i].triangle = Some(triangle_transformations[edges[i].triangle.unwrap().0]);
         }
 
+        let normals: Vec<[f32; 3]> = triangles.iter().map(|tri| {
+            let [a,b,c] = tri.corners.map(|v| nalgebra::Vector3::from(self[v].clone().unwrap().coordinates));
+            (b - a).cross(&(c - a)).into()
+        }).collect::<Vec<_>>();
+
         bevy::prelude::Mesh::new(
             bevy::render::mesh::PrimitiveTopology::TriangleList,
             RenderAssetUsages::default()
         ).with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes.into_iter().map(|n| n.coordinates).collect::<Vec<_>>())
         .with_inserted_indices(Indices::U32(triangles.into_iter().flat_map(|tri| tri.corners).map(|i| i.0 as u32).collect()))
+        .with_computed_smooth_normals()
 
 
     }
