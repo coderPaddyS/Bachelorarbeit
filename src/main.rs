@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use ba::{mesh::MeshNode, Mesh};
+use ba::{mesh::ClosedTriangleMeshNode, ClosedTriangleMesh};
 use bevy::{app::{App, Startup}, prelude::Commands, render::{render_asset::RenderAssetUsages, render_resource::{Extent3d, TextureDimension, TextureFormat}}, DefaultPlugins};
 use bevy::prelude::*;
 use bevy::prelude::Mesh as BMesh;
@@ -31,7 +31,7 @@ fn input_handler(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mesh_query: Query<&Handle<BMesh>, ()>,
     meshes: ResMut<Assets<BMesh>>,
-    mut query: Query<&mut Transform, ()>,
+    mut query: Query<&mut Transform, With<Shape>>,
     time: Res<Time>,
 ) {
     if keyboard_input.pressed(KeyCode::KeyX) {
@@ -66,7 +66,7 @@ fn setup(
     mut meshes: ResMut<Assets<bevy::prelude::Mesh>>,
 ) {
     
-    let mut mesh = Mesh::default();
+    let mut mesh = ClosedTriangleMesh::default();
     
     let nodes: Vec<_> = vec![
         [1.0f32,1.0f32,1.0f32],
@@ -78,7 +78,7 @@ fn setup(
         [-1.0f32,-1.0f32,1.0f32],
         [-1.0f32,-1.0f32,-1.0f32],
     ].into_iter().map(|node| {
-        mesh.add_node(MeshNode::new(node))
+        mesh.add_node(ClosedTriangleMeshNode::new(node))
     }).collect();
     vec![
         [2, 1, 0], [3, 1, 2],
