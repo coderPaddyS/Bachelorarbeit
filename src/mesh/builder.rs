@@ -3,7 +3,7 @@ use log::{debug, info};
 use nalgebra::Vector3;
 use thiserror::Error;
 
-use super::{ClosedTriangleMesh, Edge, Index, List, MeshError, Node, Triangle};
+use super::{ClosedTriangleMesh, Edge, Index, List, MeshError, Node, Facette};
 
 #[derive(Debug, Error)]
 pub enum MeshBuilderError {
@@ -11,6 +11,10 @@ pub enum MeshBuilderError {
     NodeDoesNotExit { label: &'static str, index: Index<UnfinishedNode> },
     #[error("The requested edge '{label}' does not exist. The requsted index was {index}")]
     UnfinishedHalfEdgeDoesNotExit { label: &'static str, index: Index<UnfinishedHalfEdge> },
+}
+
+pub trait FromMeshBuilder where Self: Sized {
+    fn build(builder: MeshBuilder) -> Result<Self, MeshBuilderError>;
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -36,13 +40,26 @@ impl UnfinishedNode {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct UnfinishedHalfEdge {
+pub struct UnfinishedHalfEdge {
     pub source: Index<UnfinishedNode>,
     pub target: Index<UnfinishedNode>,
     pub opposite: Index<UnfinishedHalfEdge>,
     pub previous: Option<Index<UnfinishedHalfEdge>>,
     pub next: Option<Index<UnfinishedHalfEdge>>,
-    pub triangle: Option<Index<UnfinishedTriangle>>,
+    pub facette: Option<Index<UnfinishedTriangle>>,
+}
+
+impl Into<Edge> for UnfinishedHalfEdge {
+    fn into(self) -> Edge {
+        Edge {
+            source: (*self.source).into(),
+            target: (*self.target).into(),
+            opposite: (*self.opposite).into(),
+            previous: (*self.previous.unwrap()).into(),
+            next: (*self.next.unwrap()).into(),
+            facette: (*self.facette.unwrap()).into()
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -50,23 +67,23 @@ pub struct UnfinishedTriangle {
     pub corners: [Index<UnfinishedNode>; 3],
 }
 
-impl Into<Triangle> for UnfinishedTriangle {
-    fn into(self) -> Triangle {
-        Triangle {
-            corners: self.corners.map(|idx| Index::new(*idx))
+impl Into<Facette> for UnfinishedTriangle {
+    fn into(self) -> Facette {
+        Facette {
+            corners: self.corners.map(|idx| Index::new(*idx)).to_vec()
         }
     }
 }
 
 #[derive(Default)]
-pub struct TriangleMeshBuilder {
+pub struct MeshBuilder {
     pub nodes: List<UnfinishedNode>,
-    edges: List<UnfinishedHalfEdge>, 
-    pub triangles: List<UnfinishedTriangle>
+    pub edges: List<UnfinishedHalfEdge>, 
+    pub facettes: List<UnfinishedTriangle>
 }
 
 
-impl core::ops::Index<Index<UnfinishedNode>> for TriangleMeshBuilder {
+impl core::ops::Index<Index<UnfinishedNode>> for MeshBuilder {
     type Output = <List<UnfinishedNode> as core::ops::Index<Index<UnfinishedNode>>>::Output;
 
     fn index(&self, index: Index<UnfinishedNode>) -> &Self::Output {
@@ -74,13 +91,13 @@ impl core::ops::Index<Index<UnfinishedNode>> for TriangleMeshBuilder {
     }
 }
 
-impl core::ops::IndexMut<Index<UnfinishedNode>> for TriangleMeshBuilder {
+impl core::ops::IndexMut<Index<UnfinishedNode>> for MeshBuilder {
     fn index_mut(&mut self, index: Index<UnfinishedNode>) -> &mut Self::Output {
         &mut self.nodes[index]
     }
 }
 
-impl core::ops::Index<Index<UnfinishedHalfEdge>> for TriangleMeshBuilder {
+impl core::ops::Index<Index<UnfinishedHalfEdge>> for MeshBuilder {
     type Output = <List<UnfinishedHalfEdge> as core::ops::Index<Index<UnfinishedHalfEdge>>>::Output;
 
     fn index(&self, index: Index<UnfinishedHalfEdge>) -> &Self::Output {
@@ -88,27 +105,27 @@ impl core::ops::Index<Index<UnfinishedHalfEdge>> for TriangleMeshBuilder {
     }
 }
 
-impl core::ops::IndexMut<Index<UnfinishedHalfEdge>> for TriangleMeshBuilder {
+impl core::ops::IndexMut<Index<UnfinishedHalfEdge>> for MeshBuilder {
     fn index_mut(&mut self, index: Index<UnfinishedHalfEdge>) -> &mut Self::Output {
         &mut self.edges[index]
     }
 }
 
-impl core::ops::Index<Index<UnfinishedTriangle>> for TriangleMeshBuilder {
+impl core::ops::Index<Index<UnfinishedTriangle>> for MeshBuilder {
     type Output = <List<UnfinishedTriangle> as core::ops::Index<Index<UnfinishedTriangle>>>::Output;
 
     fn index(&self, index: Index<UnfinishedTriangle>) -> &Self::Output {
-        &self.triangles[index]
+        &self.facettes[index]
     }
 }
 
-impl core::ops::IndexMut<Index<UnfinishedTriangle>> for TriangleMeshBuilder {
+impl core::ops::IndexMut<Index<UnfinishedTriangle>> for MeshBuilder {
     fn index_mut(&mut self, index: Index<UnfinishedTriangle>) -> &mut Self::Output {
-        &mut self.triangles[index]
+        &mut self.facettes[index]
     }
 }
 
-impl TriangleMeshBuilder {
+impl MeshBuilder {
     pub fn add_node(&mut self, node: UnfinishedNode) -> Index<UnfinishedNode> {
         self.nodes.push(Some(node));
         (self.nodes.len() - 1).into()
@@ -126,7 +143,7 @@ impl TriangleMeshBuilder {
             source: a,
             target: b,
             opposite: idx_ba,
-            triangle: None,
+            facette: None,
             next: None,
             previous: None
         };
@@ -134,7 +151,7 @@ impl TriangleMeshBuilder {
             source: b,
             target: a,
             opposite: idx_ab,
-            triangle: None,
+            facette: None,
             next: None,
             previous: None
         };
@@ -192,12 +209,12 @@ impl TriangleMeshBuilder {
     pub fn add_triangle_by_nodes(&mut self, a: Index<UnfinishedNode>, b: Index<UnfinishedNode>, c: Index<UnfinishedNode>) -> Result<Index<UnfinishedTriangle>, MeshBuilderError> {
         info!("Adding triangle with nodes: a: {a}, b: {b}, c: {c}");
         self.check_nodes_exist([("a", a), ("b", b), ("c", c)])?;
-        let tri_idx = self.triangles.len().into();
-        self.triangles.push(Some(UnfinishedTriangle { corners: [a,b,c] }));
+        let tri_idx = self.facettes.len().into();
+        self.facettes.push(Some(UnfinishedTriangle { corners: [a,b,c] }));
 
         let invert = [(a,b), (b,c), (c,a)].iter().any(|(s,t)| {
             match self[*s].as_ref().unwrap().outgoing.iter().find(|node| self[**node].as_ref().unwrap().target == *t) {
-                Some(&edge) => self[edge].as_ref().unwrap().triangle.is_some(),
+                Some(&edge) => self[edge].as_ref().unwrap().facette.is_some(),
                 None => false
             }
         });
@@ -221,7 +238,7 @@ impl TriangleMeshBuilder {
         for idx in 0..edges.len() {
             self[edges[(idx + 1) % 3]].as_mut().unwrap().previous = Some(edges[idx]);
             self[edges[idx]].as_mut().unwrap().next = Some(edges[(idx +1) % 3]);
-            self[edges[idx]].as_mut().unwrap().triangle = Some(tri_idx);
+            self[edges[idx]].as_mut().unwrap().facette = Some(tri_idx);
         }
 
         Ok(tri_idx)
@@ -229,20 +246,16 @@ impl TriangleMeshBuilder {
 
     pub fn add_triangle_by_edges(&mut self, ab: Index<UnfinishedHalfEdge>, bc: Index<UnfinishedHalfEdge>, ca: Index<UnfinishedHalfEdge>) -> Result<Index<UnfinishedTriangle>, MeshBuilderError> {
         self.check_edges_exist([("a->b", ab), ("b->c", bc), ("c->a", ca)])?;
-        let tri_idx = Index::<UnfinishedTriangle>::from(self.triangles.len() + 1);
+        let tri_idx = Index::<UnfinishedTriangle>::from(self.facettes.len() + 1);
         let corners = [ab,bc,ca].map(|edge| {
             let edge = self[edge].as_mut().unwrap();
-            edge.triangle = Some(tri_idx);
+            edge.facette = Some(tri_idx);
             edge.source
         });
-        self.triangles.push(Some(UnfinishedTriangle { 
+        self.facettes.push(Some(UnfinishedTriangle { 
             corners
         }));
         Ok(tri_idx)
-    }
-
-    pub fn try_build(self) -> Result<ClosedTriangleMesh, MeshBuilderError> {
-
     }
 }
 
@@ -252,7 +265,7 @@ mod tests {
 
     #[test]
     fn simple_cube_triangle_nodes() {
-        let mut mesh = TriangleMeshBuilder::default();
+        let mut mesh = MeshBuilder::default();
         
         let nodes: Vec<_> = vec![
             [1.0f32,1.0f32,1.0f32],
@@ -283,13 +296,13 @@ mod tests {
         assert!(mesh.nodes.iter().filter(|node| node.is_none()).collect::<Vec<_>>().is_empty());
         assert_eq!(36, mesh.edges.len());
         assert!(mesh.edges.iter().filter(|edge| edge.is_none()).collect::<Vec<_>>().is_empty());
-        assert_eq!(12, mesh.triangles.len());
-        assert!(mesh.edges.iter().filter(|edge| edge.as_ref().unwrap().triangle.is_none()).collect::<Vec<_>>().is_empty())
+        assert_eq!(12, mesh.facettes.len());
+        assert!(mesh.edges.iter().filter(|edge| edge.as_ref().unwrap().facette.is_none()).collect::<Vec<_>>().is_empty())
     }
 
     #[test]
     fn simple_cube_triangle_nodes_false_order() {
-        let mut mesh = TriangleMeshBuilder::default();
+        let mut mesh = MeshBuilder::default();
         
         let nodes: Vec<_> = vec![
             [1.0f32,1.0f32,1.0f32],
@@ -320,7 +333,7 @@ mod tests {
         assert!(mesh.nodes.iter().filter(|node| node.is_none()).collect::<Vec<_>>().is_empty());
         assert_eq!(36, mesh.edges.len());
         assert!(mesh.edges.iter().filter(|edge| edge.is_none()).collect::<Vec<_>>().is_empty());
-        assert_eq!(12, mesh.triangles.len());
-        assert!(mesh.edges.iter().filter(|edge| edge.as_ref().unwrap().triangle.is_none()).collect::<Vec<_>>().is_empty())
+        assert_eq!(12, mesh.facettes.len());
+        assert!(mesh.edges.iter().filter(|edge| edge.as_ref().unwrap().facette.is_none()).collect::<Vec<_>>().is_empty())
     }
 }

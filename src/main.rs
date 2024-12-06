@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use ba::{mesh::ClosedTriangleMeshNode, ClosedTriangleMesh};
+use ba::{mesh::{FromMeshBuilder, Node, UnfinishedNode}, ClosedTriangleMesh};
 use bevy::{app::{App, Startup}, prelude::Commands, render::{render_asset::RenderAssetUsages, render_resource::{Extent3d, TextureDimension, TextureFormat}}, DefaultPlugins};
 use bevy::prelude::*;
 use bevy::prelude::Mesh as BMesh;
@@ -66,7 +66,7 @@ fn setup(
     mut meshes: ResMut<Assets<bevy::prelude::Mesh>>,
 ) {
     
-    let mut mesh = ClosedTriangleMesh::default();
+    let mut mesh = ba::mesh::MeshBuilder::default();
     
     let nodes: Vec<_> = vec![
         [1.0f32,1.0f32,1.0f32],
@@ -78,7 +78,7 @@ fn setup(
         [-1.0f32,-1.0f32,1.0f32],
         [-1.0f32,-1.0f32,-1.0f32],
     ].into_iter().map(|node| {
-        mesh.add_node(ClosedTriangleMeshNode::new(node))
+        mesh.add_node(UnfinishedNode::new(node))
     }).collect();
     vec![
         [2, 1, 0], [3, 1, 2],
@@ -88,6 +88,10 @@ fn setup(
         [6, 3, 2], [6, 7, 3],
         [7, 1, 3], [7, 5, 1]
     ].into_iter().for_each(|[a,b,c]| { mesh.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap(); });
+    
+    debug!("building mesh");
+    let mesh = ClosedTriangleMesh::build(mesh).unwrap();
+    debug!("mesh build");
 
     let debug_material = materials.add(StandardMaterial {
         base_color_texture: Some(images.add(uv_debug_texture())),
@@ -99,6 +103,7 @@ fn setup(
     const Z_EXTENT: f32 = 5.0;
 
     for triangle in mesh.build_many() {
+        debug!("spawning triangle");
         commands.spawn((PbrBundle { 
             mesh: meshes.add(triangle), 
             material: debug_material.clone(),

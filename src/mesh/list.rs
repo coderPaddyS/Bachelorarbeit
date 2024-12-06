@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, ops::{Deref, DerefMut}, usize};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Index<T>
 where
     T: Clone
@@ -119,14 +119,37 @@ where
     }
 }
 
+// impl<T> Iterator for List<T>
+// where 
+//     T: Clone
+// {
+//     type Item = T;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         for item in &mut self.0 {
+//             if item.is_some() {
+//                 return std::mem::replace(item, None);
+//             }
+//         }
+//         return None;
+//     }
+// }
+
 impl<T> List<T>
 where
     T: Clone
 {
+    pub fn new(values: Vec<Option<T>>) -> Self {
+        Self(values)
+    }
+
+    pub fn take(self) -> Vec<Option<T>> {
+        self.0
+    }
 
     pub fn push(&mut self, value: Option<T>) -> Index<T> {
         self.0.push(value);
-        Index::new(self.0.len())
+        Index::new(self.0.len()-1)
     }
 
     pub fn compact(&mut self) -> ListIndexTransformations<T> {

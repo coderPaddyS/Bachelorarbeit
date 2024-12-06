@@ -1,7 +1,8 @@
+use bevy::{color::{Color, ColorToComponents}, render::{mesh::Indices, render_asset::RenderAssetUsages}};
 use log::{debug, info, error};
 use nalgebra::Vector3;
 
-use super::{Edge, Index, List, MeshError, Node, Triangle};
+use super::{Edge, Facette, FromMeshBuilder, Index, List, MeshBuilder, MeshError, Node};
 
 // impl From<TriangleMeshEdge> for ClosedTriangleMeshEdge {
 //     fn from(value: TriangleMeshEdge) -> Self {
@@ -16,13 +17,11 @@ use super::{Edge, Index, List, MeshError, Node, Triangle};
 //     }
 // }
 
-#[derive(Default)]
 pub struct ClosedTriangleMesh {
     pub nodes: List<Node>,
     edges: List<Edge>, 
-    pub triangles: List<Triangle>,
+    pub triangles: List<Facette>,
 }
-
 
 impl core::ops::Index<Index<Node>> for ClosedTriangleMesh {
     type Output = <List<Node> as core::ops::Index<Index<Node>>>::Output;
@@ -52,58 +51,34 @@ impl core::ops::IndexMut<Index<Edge>> for ClosedTriangleMesh {
     }
 }
 
-impl core::ops::Index<Index<Triangle>> for ClosedTriangleMesh {
-    type Output = <List<Triangle> as core::ops::Index<Index<Triangle>>>::Output;
+impl core::ops::Index<Index<Facette>> for ClosedTriangleMesh {
+    type Output = <List<Facette> as core::ops::Index<Index<Facette>>>::Output;
 
-    fn index(&self, index: Index<Triangle>) -> &Self::Output {
+    fn index(&self, index: Index<Facette>) -> &Self::Output {
         &self.triangles[index]
     }
 }
 
-impl core::ops::IndexMut<Index<Triangle>> for ClosedTriangleMesh {
-    fn index_mut(&mut self, index: Index<Triangle>) -> &mut Self::Output {
+impl core::ops::IndexMut<Index<Facette>> for ClosedTriangleMesh {
+    fn index_mut(&mut self, index: Index<Facette>) -> &mut Self::Output {
         &mut self.triangles[index]
     }
 }
 
-impl ClosedTriangleMesh {
-    pub fn add_node(&mut self, node: Node) -> Index<Node> {
-        self.nodes.push(Some(node))
+impl FromMeshBuilder for ClosedTriangleMesh {
+    fn build(builder: super::MeshBuilder) -> Result<super::ClosedTriangleMesh, super::MeshBuilderError> {
+        // builder.triangles.iter().enumerate().for_each(|(idx, triangle)| debug!("Triangle index: {idx}, Triangle: {triangle:?}"));
+        let MeshBuilder { nodes, edges, facettes } = builder;
+        let mesh = Self { 
+            nodes: List::new(nodes.take().into_iter().map(|node| node.map(|node| Into::<Node>::into(node))).collect()), 
+            edges: List::new(edges.take().into_iter().map(|edge| edge.map(|edge| edge.into())).collect()), 
+            triangles:  List::new(facettes.take().into_iter().map(|facette| facette.map(|facette| facette.into())).collect())
+        };
+        Ok(mesh)
     }
+}
 
-    /// Adds two directional edges: a -> b and a <- b.
-    /// If `a` or `b` does not exist, will return an error.   
-    // pub fn add_edges(&mut self, a: MeshNodeIndex, b: MeshNodeIndex) -> Result<(MeshEdgeIndex, MeshEdgeIndex), MeshError> {
-    //     self.check_nodes_exist(vec![("a", a), ("b", b)])?;
-
-    //     let idx_ab = MeshEdgeIndex(self.edges.len());
-    //     let idx_ba = MeshEdgeIndex(self.edges.len() + 1);
-
-    //     let edge_ab = ClosedTriangleMeshEdge {
-    //         source: a,
-    //         target: b,
-    //         opposite: idx_ba,
-    //         triangle: None,
-    //         next: None,
-    //         previous: None
-    //     };
-    //     let edge_ba = ClosedTriangleMeshEdge {
-    //         source: b,
-    //         target: a,
-    //         opposite: idx_ab,
-    //         triangle: None,
-    //         next: None,
-    //         previous: None
-    //     };
-    //     self.edges.push(Some(edge_ab));
-    //     self.edges.push(Some(edge_ba));
-
-    //     self[a].as_mut().unwrap().outgoing.push(idx_ab);
-    //     self[b].as_mut().unwrap().outgoing.push(idx_ba);
-
-    //     info!("Successfully created edges {a}<->{b} with indeces ->{idx_ab} and <-{idx_ba}");
-    //     Ok((idx_ab, idx_ba))
-    // }
+impl ClosedTriangleMesh {
 
     pub fn has_node(&self, node: Index<Node>) -> bool {
         if (0..self.nodes.len()).contains(&node) {
@@ -115,7 +90,6 @@ impl ClosedTriangleMesh {
 
     // TODO: correct error type
     fn check_nodes_exist<I: IntoIterator<Item = (&'static str, Index<Node>)> + std::fmt::Debug>(&self, nodes: I) -> Result<(), MeshError> {
-        debug!(nodes:?; "Checking if nodes exist");
         nodes.into_iter().try_for_each(|(name, node)| {
             if !self.has_node(node) {
                 error!("Node {node} does not exist!");
@@ -146,33 +120,65 @@ impl ClosedTriangleMesh {
         }
     }
 
-    // pub fn build_many(&self) -> Vec<bevy::prelude::Mesh> {
-    //     self.triangles.iter().filter_map(|tri| {
-    //         match tri {
-    //             None => None,
-    //             Some(tri) => {
-    //                 let color = Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4();
-    //                 let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
-    //                 let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
-    //                 let (normal, inv_normal) = (normal.data.0[0], (normal * -1.0).data.0[0]);
+    pub fn contract_edge(&mut self, index: Index<Edge>) {
+        let edge = std::mem::replace(&mut self[index], None).unwrap();
+        let opposite = std::mem::replace(&mut self[edge.opposite], None).unwrap();
+        let mut source = std::mem::replace(&mut self[edge.source], None).unwrap();
+        let target = edge.target;
 
-    //                 Some(
-    //                     bevy::prelude::Mesh::new(
-    //                         bevy::render::mesh::PrimitiveTopology::TriangleList,
-    //                         RenderAssetUsages::default()
-    //                     ).with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, vec![nodes.clone(), nodes].into_iter().flatten().collect::<Vec<_>>())
-    //                     .with_inserted_indices(Indices::U32([0,1,2,3,4,5].to_vec()))
-    //                     .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, vec![color, color, color])
-    //                     .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_NORMAL, [[normal; 3].to_vec(), [inv_normal; 3].to_vec()].into_iter().flatten().collect::<Vec<_>>())
-    //                 )
-    //             }
-    //         }
-    //         // .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, tri.corners.into_iter().map(|n| n.coordinates).collect::<Vec<_>>())
-    //         // .with_inserted_indices(Indices::U32(triangles.into_iter().flat_map(|tri| tri.corners).map(|i| i.0 as u32).collect()))
-    //         // // .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
-    //         // .with_computed_smooth_normals()
-    //     }).collect()
-    // }
+        // let edge_facette = self[edge.triangle].as_ref().cloned().unwrap();
+        // let opposite_facette = self[opposite.triangle].as_ref().cloned().unwrap();
+
+        let edge_facette = std::mem::replace(&mut self[edge.facette], None).unwrap();
+        let opposite_facette = std::mem::replace(&mut self[opposite.facette], None).unwrap_or(edge_facette.clone());
+
+        source.outgoing = source.outgoing.into_iter().filter_map(|outgoing| {
+            if index == outgoing {
+                return None;
+            }
+            let opposite = {
+                let edge_target = self[outgoing].as_mut().unwrap().target;
+                if edge_facette.corners.contains(&edge.target) || opposite_facette.corners.contains(&edge.target) {
+                    let edge = std::mem::replace(&mut self[outgoing], None).unwrap();
+                    std::mem::replace(&mut self[edge.opposite], None);
+                    return None;
+                }
+                let edge = self[outgoing].as_mut().unwrap();
+                edge.source = target;
+                edge.opposite
+            };
+            Some(outgoing)
+        }).collect();
+    }
+
+    pub fn build_many(&self) -> Vec<bevy::prelude::Mesh> {
+        self.triangles.iter().filter_map(|tri| {
+            match tri {
+                None => None,
+                Some(tri) => {
+                    debug!("Facette: {tri:?}");
+                    let color = Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4();
+                    let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
+                    let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
+                    let (normal, inv_normal) = (normal.data.0[0], (normal * -1.0).data.0[0]);
+
+                    Some(
+                        bevy::prelude::Mesh::new(
+                            bevy::render::mesh::PrimitiveTopology::TriangleList,
+                            RenderAssetUsages::default()
+                        ).with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, vec![nodes.clone(), nodes].into_iter().flatten().collect::<Vec<_>>())
+                        .with_inserted_indices(Indices::U32([0,1,2,3,4,5].to_vec()))
+                        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, vec![color, color, color])
+                        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_NORMAL, [[normal; 3].to_vec(), [inv_normal; 3].to_vec()].into_iter().flatten().collect::<Vec<_>>())
+                    )
+                }
+            }
+            // .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, tri.corners.into_iter().map(|n| n.coordinates).collect::<Vec<_>>())
+            // .with_inserted_indices(Indices::U32(triangles.into_iter().flat_map(|tri| tri.corners).map(|i| i.0 as u32).collect()))
+            // // .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
+            // .with_computed_smooth_normals()
+        }).collect()
+    }
 }
 
 // impl MeshBuilder for ClosedTriangleMesh {
