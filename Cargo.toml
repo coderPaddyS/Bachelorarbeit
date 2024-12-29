@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.14.2", features = ["dynamic_linking"] }
+apply = "0.3.0"
+# bevy = { version = "0.14.2", features = ["dynamic_linking"] }
+bevy = { version = "0.14.2" }
 csv = "1.3.1"
 log = { version = "0.4.22", features = ["kv", "std"] }
 nalgebra = "0.33.2"

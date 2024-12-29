@@ -16,7 +16,7 @@ fn main() {
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_systems(Startup, setup)
         .add_systems(Update, input_handler)
-        .add_systems(Update, rotate)
+        // .add_systems(Update, rotate)
         .run();
 }
 
@@ -70,70 +70,74 @@ fn setup(
     
     let mut mesh = ba::mesh::MeshBuilder::default();
     
-    // let nodes: Vec<_> = vec![
-    //     [1.0f32,1.0f32,1.0f32],
-    //     [1.0f32,1.0f32,-1.0f32],
-    //     [1.0f32,-1.0f32,1.0f32],
-    //     [1.0f32,-1.0f32,-1.0f32],
-    //     [-1.0f32,1.0f32,1.0f32],
-    //     [-1.0f32,1.0f32,-1.0f32],
-    //     [-1.0f32,-1.0f32,1.0f32],
-    //     [-1.0f32,-1.0f32,-1.0f32],
-    // ].into_iter().map(|node| {
-    //     mesh.add_node(UnfinishedNode::new(node))
-    // }).collect();
-    // vec![
-    //     [2, 1, 0], [3, 1, 2],
-    //     [5, 0, 1], [4, 0, 5],
-    //     [4, 2, 0], [4, 6, 2],
-    //     [5, 6, 4], [7, 6, 5],
-    //     [6, 3, 2], [6, 7, 3],
-    //     [7, 1, 3], [7, 5, 1]
-    // ].into_iter().for_each(|[a,b,c]| { mesh.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap(); });
+    let nodes: Vec<_> = vec![
+        [1.0f32,1.0f32,1.0f32],
+        [1.0f32,1.0f32,-1.0f32],
+        [1.0f32,-1.0f32,1.0f32],
+        [1.0f32,-1.0f32,-1.0f32],
+        [-1.0f32,1.0f32,1.0f32],
+        [-1.0f32,1.0f32,-1.0f32],
+        [-1.0f32,-1.0f32,1.0f32],
+        [-1.0f32,-1.0f32,-1.0f32],
+    ].into_iter().map(|node| {
+        mesh.add_node(UnfinishedNode::new(node))
+    }).collect();
+    vec![
+        [2, 1, 0], [3, 1, 2],
+        [5, 0, 1], [4, 0, 5],
+        [4, 2, 0], [4, 6, 2],
+        [5, 6, 4], [7, 6, 5],
+        [6, 3, 2], [6, 7, 3],
+        [7, 1, 3], [7, 5, 1]
+    ].into_iter()
+        .for_each(|[a,b,c]| { 
+            mesh.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap();
+        });
 
-    let nodes: Vec<_> = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_path("data/hollow_cube_DV.ver")
-        .unwrap()
-        .records()
-        .enumerate()
-        .map(| (i, result)| {
-            println!("line: {i}");
-            let coordinates: [f32; 3] = result.unwrap()
-                .into_iter()
-                .enumerate()
-                .map(|(index, c)| c.parse::<f32>().expect(&format!("Error paring index: {index}, c: {c}"))).collect::<Vec<_>>().try_into().unwrap();
-            println!("{coordinates:?}");
-            mesh.add_node(UnfinishedNode::new(coordinates))
-        })
-        .collect();
+    // let nodes: Vec<_> = csv::ReaderBuilder::new()
+    //     .has_headers(false)
+    //     .from_path("data/hollow_cube_DV.ver")
+    //     .unwrap()
+    //     .records()
+    //     .enumerate()
+    //     .map(| (i, result)| {
+    //         println!("line: {i}");
+    //         let coordinates: [f32; 3] = result.unwrap()
+    //             .into_iter()
+    //             .enumerate()
+    //             .map(|(index, c)| c.parse::<f32>().expect(&format!("Error paring index: {index}, c: {c}"))).collect::<Vec<_>>().try_into().unwrap();
+    //         println!("{coordinates:?}");
+    //         mesh.add_node(UnfinishedNode::new(coordinates))
+    //     })
+    //     .collect();
 
-    println!("{}, {nodes:?}", nodes.len());
-    let triangles: Vec<_> = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_path("data/hollow_cube_DV.tri")
-        .unwrap()
-        .records()
-        .enumerate()
-        .map(| (i, result)| {
-            println!("line: {i}");
-            let [a,b,c] = result.unwrap()
-                .into_iter()
-                .enumerate()
-                .map(|(index, c)| c.parse::<usize>().expect(&format!("Error paring index: {index}, c: {c}")))
-                .map(|index| (index - 1).into())
-                .collect::<Vec<_>>().try_into().unwrap();
-            debug!("a: {a}, b: {b}, c: {c}");
-            mesh.add_triangle_by_nodes(a, b, c).unwrap()
-        })
-        .collect();
+    // println!("{}, {nodes:?}", nodes.len());
+    // let triangles: Vec<_> = csv::ReaderBuilder::new()
+    //     .has_headers(false)
+    //     .from_path("data/hollow_cube_DV.tri")
+    //     .unwrap()
+    //     .records()
+    //     .enumerate()
+    //     .map(| (i, result)| {
+    //         println!("line: {i}");
+    //         let [a,b,c] = result.unwrap()
+    //             .into_iter()
+    //             .enumerate()
+    //             .map(|(index, c)| c.parse::<usize>().expect(&format!("Error paring index: {index}, c: {c}")))
+    //             .map(|index| (index - 1).into())
+    //             .collect::<Vec<_>>().try_into().unwrap();
+    //         debug!("a: {a}, b: {b}, c: {c}");
+    //         mesh.add_triangle_by_nodes(a, b, c).unwrap()
+    //     })
+    //     .collect();
 
-    for (index, edge) in mesh.edges.iter().enumerate() {
-        println!("{index}: {edge:?}");
-    }
+    // for (index, edge) in mesh.edges.iter().enumerate() {
+    //     println!("{index}: {edge:?}");
+    // }
     
     debug!("building mesh");
-    let mesh = ClosedTriangleMesh::build(mesh).unwrap();
+    let mut mesh = ClosedTriangleMesh::build(mesh).unwrap();
+    mesh.contract_edge(10.into());
     debug!("mesh build");
 
     let debug_material = materials.add(StandardMaterial {

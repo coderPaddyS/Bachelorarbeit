@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(OSX) Launch",
+            "name": "Plain",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceRoot}/target/debug/foo",
+            "program": "${workspaceRoot}/target/debug/ba",
             "args": [],
             "cwd": "${workspaceRoot}",
         }

@@ -67,7 +67,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct List<T>(Vec<Option<T>>)
 where
     T: Clone;
