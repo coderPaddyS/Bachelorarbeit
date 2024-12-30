@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 
 use ba::{mesh::{FromMeshBuilder, Node, UnfinishedNode}, ClosedTriangleMesh};
-use bevy::{app::{App, Startup}, prelude::Commands, render::{render_asset::RenderAssetUsages, render_resource::{Extent3d, TextureDimension, TextureFormat}}, DefaultPlugins};
+use bevy::{app::{App, Startup}, prelude::Commands, render::{render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}}, DefaultPlugins};
 use bevy::prelude::*;
 use bevy::prelude::Mesh as BMesh;
 use csv::StringRecord;
@@ -68,8 +68,7 @@ fn setup(
     mut meshes: ResMut<Assets<bevy::prelude::Mesh>>,
 ) {
     
-    let mut mesh = ba::mesh::MeshBuilder::default();
-    
+    let mut builder = ba::mesh::MeshBuilder::default();
     let nodes: Vec<_> = vec![
         [1.0f32,1.0f32,1.0f32],
         [1.0f32,1.0f32,-1.0f32],
@@ -80,18 +79,18 @@ fn setup(
         [-1.0f32,-1.0f32,1.0f32],
         [-1.0f32,-1.0f32,-1.0f32],
     ].into_iter().map(|node| {
-        mesh.add_node(UnfinishedNode::new(node))
+        builder.add_node(UnfinishedNode::new(node))
     }).collect();
     vec![
-        [2, 1, 0], [3, 1, 2],
-        [5, 0, 1], [4, 0, 5],
-        [4, 2, 0], [4, 6, 2],
-        [5, 6, 4], [7, 6, 5],
-        [6, 3, 2], [6, 7, 3],
-        [7, 1, 3], [7, 5, 1]
+        [2, 0, 1], [3,2, 1],
+        [5, 1, 0], [4,5, 0],
+        [4, 0, 2], [4,2, 6],
+        [5, 4, 6], [7,5, 6],
+        [6, 2, 3], [6,3, 7],
+        [7, 3, 1], [7,1, 5]
     ].into_iter()
         .for_each(|[a,b,c]| { 
-            mesh.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap();
+            builder.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap();
         });
 
     // let nodes: Vec<_> = csv::ReaderBuilder::new()
@@ -136,12 +135,14 @@ fn setup(
     // }
     
     debug!("building mesh");
-    let mut mesh = ClosedTriangleMesh::build(mesh).unwrap();
-    mesh.contract_edge(10.into());
+    let mut mesh = ClosedTriangleMesh::build(builder).unwrap();
+    let contraction = mesh.contract_edge(0.into());
+    mesh.uncontract_edge(contraction);
     debug!("mesh build");
 
     let debug_material = materials.add(StandardMaterial {
         base_color_texture: Some(images.add(uv_debug_texture())),
+        cull_mode: None,
         ..default()
     });
 

@@ -403,10 +403,10 @@ impl ClosedTriangleMesh {
                         bevy::prelude::Mesh::new(
                             bevy::render::mesh::PrimitiveTopology::TriangleList,
                             RenderAssetUsages::default()
-                        ).with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, vec![nodes.clone(), nodes].into_iter().flatten().collect::<Vec<_>>())
+                        ).with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes)
                         .with_inserted_indices(Indices::U32([0,1,2,3,4,5].to_vec()))
                         .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, vec![color, color, color])
-                        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_NORMAL, [[normal; 3].to_vec(), [inv_normal; 3].to_vec()].into_iter().flatten().collect::<Vec<_>>())
+                        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_NORMAL, [normal; 3].to_vec())
                     )
                 }
             }
@@ -581,6 +581,24 @@ mod tests {
         assert!(mesh.edges[10.into()].as_ref().is_none());
         assert!(mesh.edges[11.into()].as_ref().is_none());
 
+        // Check that the modified edges and their adjacent facette edges are correct
+        let pairings: Vec<(usize, usize, usize)> = vec![
+            (2, 1, 2), (3, 2, 1), 
+            (6, 1, 3), (7, 3, 1),
+            (8, 3, 2), (9, 2, 3),
+            (12, 5, 1), (13, 1, 5),
+            (14, 1, 4), (15, 4, 1),
+            (16, 4, 5), (17, 5, 4),
+            (18, 2, 4), (19, 4, 2)
+        ];
+        for (edge, source, target) in pairings {
+            let edge = mesh.edges[edge.into()].as_ref().unwrap();
+            assert_eq!(edge.source, source.into());
+            assert_eq!(edge.target, target.into());
+        }
+
+        // Check that the edges surround each modified facette
+        // Check that the facettes are correct
         for [idx_ab, idx_bc, idx_ca] in [[2.into(), 18.into(), 15.into()], [3.into(), 6.into(), 8.into()], [12.into(), 14.into(), 16.into()]] as [[Index<Edge>; 3]; 3] {
             let (ab, bc, ca) = (
                 mesh[idx_ab].as_ref().unwrap(),
@@ -597,6 +615,12 @@ mod tests {
 
             assert_eq!(ab.facette, bc.facette);
             assert_eq!(bc.facette, ca.facette);
+
+            let facette = mesh[ab.facette].as_ref().unwrap();
+            assert_eq!(facette.corners.len(), 3);
+            for edge in [ab, bc, ca] {
+                assert!(facette.corners.contains(&edge.source))
+            }
         }
 
         Ok(())
