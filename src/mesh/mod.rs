@@ -30,7 +30,7 @@ impl Node {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug, Hash)]
 pub struct Edge {
     pub source: Index<Node>,
     pub target: Index<Node>,
@@ -39,6 +39,14 @@ pub struct Edge {
     pub next: Index<Edge>,
     pub facette: Index<Facette>,
 }
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Self) -> bool {
+        return self.source == other.source && self.target == other.target;
+    }
+}
+
+impl Eq for Edge {}
 
 #[derive(Clone, Debug, Default)]
 pub struct Facette {

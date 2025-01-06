@@ -1,7 +1,7 @@
 use std::{f32::consts::PI, ops::{Deref, DerefMut}};
 
 use ba::{mesh::{FromMeshBuilder, Node, UnfinishedNode}, ClosedTriangleMesh};
-use bevy::{app::{App, Startup}, ecs::query::QueryData, input::{keyboard::KeyboardInput, mouse::MouseMotion, ButtonState}, prelude::Commands, render::{render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}, view::WindowSurfaces}, window::{CursorGrabMode, PrimaryWindow}, DefaultPlugins};
+use bevy::{app::{App, Startup}, ecs::query::QueryData, input::{keyboard::KeyboardInput, mouse::MouseMotion, ButtonState}, prelude::Commands, render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}, view::WindowSurfaces}, window::{CursorGrabMode, PrimaryWindow}, DefaultPlugins};
 use bevy::prelude::*;
 use bevy::prelude::Mesh as BMesh;
 use csv::StringRecord;
@@ -26,6 +26,40 @@ impl Deref for OrbifoldMesh {
 impl DerefMut for OrbifoldMesh {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl OrbifoldMesh {
+    pub fn build_mesh(&self) -> bevy::prelude::Mesh {
+        let (colors, nodes): (Vec<Vec4>, Vec<[f32; 3]>) = self.triangles
+            .iter()
+            .cloned()
+            .filter_map(|tri| {
+                match tri {
+                    None => None,
+                    Some(tri) => {
+                        let color = Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4();
+                        let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
+                        // let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
+
+                        Some((color, nodes))
+                    }
+                }
+            })
+            .map(|(color, nodes)| {
+                nodes.into_iter().map(move |node| (color, node))
+            })
+            .flatten()
+            .unzip();
+
+        bevy::prelude::Mesh::new(
+                bevy::render::mesh::PrimitiveTopology::TriangleList,
+                RenderAssetUsages::default()
+            )
+            .with_inserted_indices(Indices::U32((0..nodes.len()).map(|i| i as u32).collect::<Vec<_>>()))
+            .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes)
+            .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
+            // .apply(|(colors, other): (Vec<Vec4>, Vec<([f32; 3], Vector3<f32>)>)| (colors, other.unzip()));
     }
 }
 
@@ -136,14 +170,16 @@ fn collapse_edge(
     for input in keyboard_input.read() {
         if input.key_code == KeyCode::KeyC && input.state  == ButtonState::Released {
             println!("contracting!");
-            orbifold.contract_edge(0.into());
+            orbifold.contract_next_edge();
+            mesh.0 = meshes.add(orbifold.build_mesh())
+        }
+        if input.key_code == KeyCode::KeyU && input.state  == ButtonState::Released {
+            println!("uncontracting!");
+            orbifold.uncontract_next_edge();
             mesh.0 = meshes.add(orbifold.build_mesh())
         }
     }
 }
-
-#[derive(Component)]
-struct Mesh;
 
 fn setup(
     mut commands: Commands,
@@ -179,10 +215,7 @@ fn setup(
         });
     
     debug!("building mesh");
-    let mut mesh = ClosedTriangleMesh::build(builder).unwrap();
-    let contraction = mesh.contract_edge(0.into());
-    mesh.uncontract_edge(contraction);
-    debug!("mesh build");
+    let mesh = OrbifoldMesh(ClosedTriangleMesh::build(builder).unwrap());
 
     let debug_material = materials.add(StandardMaterial {
         base_color_texture: Some(images.add(uv_debug_texture())),
@@ -193,7 +226,7 @@ fn setup(
     commands.spawn((
         Mesh3d(meshes.add(mesh.build_mesh())),
         MeshMaterial3d(debug_material), 
-        OrbifoldMesh(mesh)
+        mesh
     ));
 
         let camera_and_light_transform =

@@ -42,6 +42,15 @@ where
     }
 }
 
+impl<T> From<Index<T>> for usize
+where
+    T: Clone
+{
+    fn from(value: Index<T>) -> Self {
+        value.index
+    }
+}
+
 impl<T> Copy for Index<T> where T: Clone {}
 
 impl<T> Index<T>

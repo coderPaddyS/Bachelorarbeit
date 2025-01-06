@@ -1,7 +1,8 @@
+use std::collections::BinaryHeap;
+
 use apply::{Also, Apply};
-use bevy::{color::{Color, ColorToComponents}, math::Vec4, prelude::IntoSystem, render::{mesh::Indices, render_asset::RenderAssetUsages}};
 use log::{debug, info, error};
-use nalgebra::Vector3;
+use priority_queue::PriorityQueue;
 
 use super::{Edge, Facette, FromMeshBuilder, Index, List, MeshBuilder, MeshError, Node};
 
@@ -18,6 +19,7 @@ use super::{Edge, Facette, FromMeshBuilder, Index, List, MeshBuilder, MeshError,
 //     }
 // }
 
+#[derive(Clone)]
 pub struct TriangleMeshHalfEdgeCollapse {
     pub source: (Index<Node>, Node),
     pub target: Index<Node>,
@@ -34,8 +36,10 @@ pub enum HalfEdgeExpansionEvent {
 #[derive(Clone)]
 pub struct ClosedTriangleMesh {
     pub nodes: List<Node>,
-    edges: List<Edge>, 
+    pub edges: List<Edge>, 
     pub triangles: List<Facette>,
+    pub contraction_order: PriorityQueue<Index<Edge>, usize>,
+    pub undo_contraction: Vec<TriangleMeshHalfEdgeCollapse>
 }
 
 impl core::ops::Index<Index<Node>> for ClosedTriangleMesh {
@@ -102,11 +106,14 @@ impl FromMeshBuilder for ClosedTriangleMesh {
                 it.outgoing = Self::collect_outgoing_edges_with_edges(&edges, it);
             })))
             .collect();
-        let mesh = Self { 
+        let mut mesh = Self { 
+            contraction_order: PriorityQueue::with_capacity(edges.len()),
             nodes: List::new(nodes), 
             edges, 
-            triangles:  List::new(triangles)
+            triangles:  List::new(triangles),
+            undo_contraction: Vec::new()
         };
+        mesh.generate_contraction_order();
         Ok(mesh)
     }
 }
@@ -121,7 +128,26 @@ impl ClosedTriangleMesh {
         }
     }
 
-    // TODO: correct error type
+    fn generate_contraction_order(&mut self) {
+        self.contraction_order.clear();
+
+        for (index, edge) in self.edges.iter().filter(|edge| edge.is_some()).enumerate() {
+            // TODO: Generate a good contraction order
+            self.contraction_order.push(index.into(), index);
+        }
+    }
+
+    fn update_contraction_order<'a, I: Iterator<Item = &'a Index<Edge>>>(&mut self, affected: I) {
+        // TODO: correctly recompute contraction order
+        for edge in affected {
+            if self[*edge].is_none() {
+                self.contraction_order.remove(edge);
+            } else {
+                self.contraction_order.push(*edge, (*edge).into());
+            }
+        }
+    }
+
     fn check_nodes_exist<I: IntoIterator<Item = (&'static str, Index<Node>)> + std::fmt::Debug>(&self, nodes: I) -> Result<(), MeshError> {
         nodes.into_iter().try_for_each(|(name, node)| {
             if !self.has_node(node) {
@@ -203,6 +229,11 @@ impl ClosedTriangleMesh {
             outgoing.push(edge);
         }
         outgoing
+    }
+
+    pub fn contract_next_edge(&mut self) -> TriangleMeshHalfEdgeCollapse {
+        let next = self.contraction_order.pop();
+        self.contract_edge(next.unwrap().0)
     }
 
     pub fn contract_edge(&mut self, index: Index<Edge>) -> TriangleMeshHalfEdgeCollapse {
@@ -314,13 +345,21 @@ impl ClosedTriangleMesh {
 
         self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges(ts.source);
 
-        TriangleMeshHalfEdgeCollapse {
+        let info = TriangleMeshHalfEdgeCollapse {
             source: (st.source, source.clone()),
             target: st.target,
             facettes,
             removed_facettes: [(st.facette, st_facette), (ts.facette, ts_facette)],
             removed_edges: vec![(_as.opposite, sa), (st.previous, _as), (ds.opposite, sd), (ts.next, ds), (st.opposite, ts), (index, st)],
-        }
+        };
+        self.update_contraction_order(info.removed_edges.iter().map(|(index,_) | index));
+        self.undo_contraction.push(info.clone());
+        info
+    }
+
+    pub fn uncontract_next_edge(&mut self) {
+        let info = self.undo_contraction.pop();
+        self.uncontract_edge(info.unwrap());
     }
 
     pub fn uncontract_edge(
@@ -391,67 +430,8 @@ impl ClosedTriangleMesh {
             });
             self[facette].as_mut().unwrap().corners = vec![a, b, c];
         }
-    }
 
-    pub fn build_mesh(&self) -> bevy::prelude::Mesh {
-        let (colors, nodes): (Vec<Vec4>, Vec<[f32; 3]>) = self.triangles
-            .iter()
-            .cloned()
-            .filter_map(|tri| {
-                match tri {
-                    None => None,
-                    Some(tri) => {
-                        let color = Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4();
-                        let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
-                        // let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
-
-                        Some((color, nodes))
-                    }
-                }
-            })
-            .map(|(color, nodes)| {
-                nodes.into_iter().map(move |node| (color, node))
-            })
-            .flatten()
-            .unzip();
-
-        bevy::prelude::Mesh::new(
-                bevy::render::mesh::PrimitiveTopology::TriangleList,
-                RenderAssetUsages::default()
-            )
-            .with_inserted_indices(Indices::U32((0..nodes.len()).map(|i| i as u32).collect::<Vec<_>>()))
-            .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes)
-            .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
-            // .apply(|(colors, other): (Vec<Vec4>, Vec<([f32; 3], Vector3<f32>)>)| (colors, other.unzip()));
-    }
-
-    pub fn build_many(&self) -> Vec<bevy::prelude::Mesh> {
-        self.triangles.iter().filter_map(|tri| {
-            match tri {
-                None => None,
-                Some(tri) => {
-                    debug!("Facette: {tri:?}");
-                    let color = Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4();
-                    let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
-                    let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
-                    let (normal, inv_normal) = (normal.data.0[0], (normal * -1.0).data.0[0]);
-
-                    Some(
-                        bevy::prelude::Mesh::new(
-                            bevy::render::mesh::PrimitiveTopology::TriangleList,
-                            RenderAssetUsages::default()
-                        ).with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes)
-                        .with_inserted_indices(Indices::U32([0,1,2,3,4,5].to_vec()))
-                        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, vec![color, color, color])
-                        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_NORMAL, [normal; 3].to_vec())
-                    )
-                }
-            }
-            // .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, tri.corners.into_iter().map(|n| n.coordinates).collect::<Vec<_>>())
-            // .with_inserted_indices(Indices::U32(triangles.into_iter().flat_map(|tri| tri.corners).map(|i| i.0 as u32).collect()))
-            // // .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
-            // .with_computed_smooth_normals()
-        }).collect()
+        self.update_contraction_order(removed_edge_indices.iter());
     }
 }
 
