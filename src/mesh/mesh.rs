@@ -1,5 +1,5 @@
 use apply::{Also, Apply};
-use bevy::{color::{Color, ColorToComponents}, render::{mesh::Indices, render_asset::RenderAssetUsages}};
+use bevy::{color::{Color, ColorToComponents}, math::Vec4, prelude::IntoSystem, render::{mesh::Indices, render_asset::RenderAssetUsages}};
 use log::{debug, info, error};
 use nalgebra::Vector3;
 
@@ -18,12 +18,17 @@ use super::{Edge, Facette, FromMeshBuilder, Index, List, MeshBuilder, MeshError,
 //     }
 // }
 
-pub struct TriangleMeshHalfEdgeContraction {
+pub struct TriangleMeshHalfEdgeCollapse {
     pub source: (Index<Node>, Node),
     pub target: Index<Node>,
     pub facettes: Vec<Index<Facette>>,
     pub removed_edges: Vec<(Index<Edge>, Edge)>,
     pub removed_facettes: [(Index<Facette>, Option<Facette>); 2],
+}
+
+pub enum HalfEdgeExpansionEvent {
+    FacetteMoved,
+    FacetteInserted
 }
 
 #[derive(Clone)]
@@ -200,7 +205,7 @@ impl ClosedTriangleMesh {
         outgoing
     }
 
-    pub fn contract_edge(&mut self, index: Index<Edge>) -> TriangleMeshHalfEdgeContraction {
+    pub fn contract_edge(&mut self, index: Index<Edge>) -> TriangleMeshHalfEdgeCollapse {
 
         // Update the edges attached to the facettes edge_facette/opposite_facette.
         // Those facettes are removed and attached to the next facettes counterclockwise/clockwise with respect to the source node.
@@ -309,7 +314,7 @@ impl ClosedTriangleMesh {
 
         self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges(ts.source);
 
-        TriangleMeshHalfEdgeContraction {
+        TriangleMeshHalfEdgeCollapse {
             source: (st.source, source.clone()),
             target: st.target,
             facettes,
@@ -320,12 +325,12 @@ impl ClosedTriangleMesh {
 
     pub fn uncontract_edge(
         &mut self, 
-        TriangleMeshHalfEdgeContraction { 
+        TriangleMeshHalfEdgeCollapse { 
             source, 
             target, 
             facettes, 
             removed_edges, 
-            removed_facettes }: TriangleMeshHalfEdgeContraction,
+            removed_facettes }: TriangleMeshHalfEdgeCollapse,
         ) {
 
         let (idx_source, source) = source;
@@ -386,6 +391,38 @@ impl ClosedTriangleMesh {
             });
             self[facette].as_mut().unwrap().corners = vec![a, b, c];
         }
+    }
+
+    pub fn build_mesh(&self) -> bevy::prelude::Mesh {
+        let (colors, nodes): (Vec<Vec4>, Vec<[f32; 3]>) = self.triangles
+            .iter()
+            .cloned()
+            .filter_map(|tri| {
+                match tri {
+                    None => None,
+                    Some(tri) => {
+                        let color = Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4();
+                        let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
+                        // let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
+
+                        Some((color, nodes))
+                    }
+                }
+            })
+            .map(|(color, nodes)| {
+                nodes.into_iter().map(move |node| (color, node))
+            })
+            .flatten()
+            .unzip();
+
+        bevy::prelude::Mesh::new(
+                bevy::render::mesh::PrimitiveTopology::TriangleList,
+                RenderAssetUsages::default()
+            )
+            .with_inserted_indices(Indices::U32((0..nodes.len()).map(|i| i as u32).collect::<Vec<_>>()))
+            .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes)
+            .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
+            // .apply(|(colors, other): (Vec<Vec4>, Vec<([f32; 3], Vector3<f32>)>)| (colors, other.unzip()));
     }
 
     pub fn build_many(&self) -> Vec<bevy::prelude::Mesh> {

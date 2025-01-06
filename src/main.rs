@@ -1,12 +1,33 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, ops::{Deref, DerefMut}};
 
 use ba::{mesh::{FromMeshBuilder, Node, UnfinishedNode}, ClosedTriangleMesh};
-use bevy::{app::{App, Startup}, prelude::Commands, render::{render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}}, DefaultPlugins};
+use bevy::{app::{App, Startup}, ecs::query::QueryData, input::{keyboard::KeyboardInput, mouse::MouseMotion, ButtonState}, prelude::Commands, render::{render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}, view::WindowSurfaces}, window::{CursorGrabMode, PrimaryWindow}, DefaultPlugins};
 use bevy::prelude::*;
 use bevy::prelude::Mesh as BMesh;
 use csv::StringRecord;
 use nalgebra::coordinates;
 
+
+#[derive(Component)]
+struct OrbifoldMesh(ClosedTriangleMesh);
+
+#[derive(Component)]
+struct CameraRotation {
+    yaw: f32,
+    pitch: f32
+}
+
+impl Deref for OrbifoldMesh {
+    type Target = ClosedTriangleMesh;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for OrbifoldMesh {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 fn main() {
 
@@ -15,14 +36,14 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_systems(Startup, setup)
-        .add_systems(Update, input_handler)
+        .add_systems(Update, (input_handler, mouse_rotation, move_camera, collapse_edge).chain())
         // .add_systems(Update, rotate)
         .run();
 }
 
-fn rotate(mut query: Query<&mut Transform, With<Shape>>, time: Res<Time>) {
+fn rotate(mut query: Query<&mut Transform, With<OrbifoldMesh>>, time: Res<Time>) {
     for mut transform in &mut query {
-        transform.rotate_y(time.delta_seconds() / 2.);
+        transform.rotate_y(time.delta_secs() / 2.);
     }
 }
 
@@ -31,24 +52,22 @@ fn rotate(mut query: Query<&mut Transform, With<Shape>>, time: Res<Time>) {
 // check out examples/input/ for more examples about user input.
 fn input_handler(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mesh_query: Query<&Handle<BMesh>, ()>,
-    meshes: ResMut<Assets<BMesh>>,
-    mut query: Query<&mut Transform, With<Shape>>,
+    mut query: Query<&mut Transform, With<OrbifoldMesh>>,
     time: Res<Time>,
 ) {
     if keyboard_input.pressed(KeyCode::KeyX) {
         for mut transform in &mut query {
-            transform.rotate_x(time.delta_seconds() / 1.2);
+            transform.rotate_x(time.delta_secs() / 1.2);
         }
     }
     if keyboard_input.pressed(KeyCode::KeyY) {
         for mut transform in &mut query {
-            transform.rotate_y(time.delta_seconds() / 1.2);
+            transform.rotate_y(time.delta_secs() / 1.2);
         }
     }
     if keyboard_input.pressed(KeyCode::KeyZ) {
         for mut transform in &mut query {
-            transform.rotate_z(time.delta_seconds() / 1.2);
+            transform.rotate_z(time.delta_secs() / 1.2);
         }
     }
     if keyboard_input.pressed(KeyCode::KeyR) {
@@ -58,14 +77,80 @@ fn input_handler(
     }
 }
 
+fn move_camera(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut query: Single<&mut Transform, With<Camera>>,
+    time: Res<Time>
+) {
+    let mut transform = query.into_inner();
+    let mut direction = Vec3::ZERO;
+
+    if keyboard_input.pressed(KeyCode::KeyW) || keyboard_input.pressed(KeyCode::ArrowUp) {
+        direction += *transform.forward(); // Move forward
+    }
+    if keyboard_input.pressed(KeyCode::KeyS) || keyboard_input.pressed(KeyCode::ArrowDown) {
+        direction += *transform.back(); // Move backward
+    }
+    if keyboard_input.pressed(KeyCode::KeyA) || keyboard_input.pressed(KeyCode::ArrowLeft) {
+        direction += *transform.left(); // Move left
+    }
+    if keyboard_input.pressed(KeyCode::KeyD) || keyboard_input.pressed(KeyCode::ArrowRight) {
+        direction += *transform.right(); // Move right
+    }
+    if keyboard_input.pressed(KeyCode::ShiftLeft) {
+        direction += *transform.down(); // Move left
+    }
+    if keyboard_input.pressed(KeyCode::Space) {
+        direction += *transform.up(); // Move right
+    }
+
+    if direction.length() > 0.0 {
+        direction = direction.normalize() * 0.2;
+        transform.translation += direction; // Update the camera's position
+    }
+}
+
+fn mouse_rotation(
+    mut mouse_motion_events: EventReader<MouseMotion>,
+    query: Single<(&mut Transform, &mut CameraRotation), With<Camera>>,
+) {
+    let (mut transform, mut rotation) = query.into_inner();
+    for event in mouse_motion_events.read() {
+        // Adjust the rotation based on mouse movement
+        let sensitivity = 0.1; // Adjust sensitivity as needed
+        rotation.yaw -= event.delta.y * sensitivity;
+        rotation.pitch -= event.delta.x * sensitivity;
+
+        // Apply rotation
+        // Quat::from_rotation_y(yaw) + Quat::from_rotation_x(angle)
+        transform.rotation = Quat::from_euler(EulerRot::ZYX, rotation.yaw.to_radians(), rotation.pitch.to_radians(), 0.0);
+    }
+}
+
+fn collapse_edge(
+    mut keyboard_input: EventReader<KeyboardInput>,
+    mut meshes: ResMut<Assets<bevy::prelude::Mesh>>,
+    mesh: Single<(&mut Mesh3d, &mut OrbifoldMesh)>,
+) {
+    let (mut mesh, mut orbifold) = mesh.into_inner();
+    for input in keyboard_input.read() {
+        if input.key_code == KeyCode::KeyC && input.state  == ButtonState::Released {
+            println!("contracting!");
+            orbifold.contract_edge(0.into());
+            mesh.0 = meshes.add(orbifold.build_mesh())
+        }
+    }
+}
+
 #[derive(Component)]
-struct Shape;
+struct Mesh;
 
 fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<bevy::prelude::Mesh>>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>
 ) {
     
     let mut builder = ba::mesh::MeshBuilder::default();
@@ -92,47 +177,6 @@ fn setup(
         .for_each(|[a,b,c]| { 
             builder.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap();
         });
-
-    // let nodes: Vec<_> = csv::ReaderBuilder::new()
-    //     .has_headers(false)
-    //     .from_path("data/hollow_cube_DV.ver")
-    //     .unwrap()
-    //     .records()
-    //     .enumerate()
-    //     .map(| (i, result)| {
-    //         println!("line: {i}");
-    //         let coordinates: [f32; 3] = result.unwrap()
-    //             .into_iter()
-    //             .enumerate()
-    //             .map(|(index, c)| c.parse::<f32>().expect(&format!("Error paring index: {index}, c: {c}"))).collect::<Vec<_>>().try_into().unwrap();
-    //         println!("{coordinates:?}");
-    //         mesh.add_node(UnfinishedNode::new(coordinates))
-    //     })
-    //     .collect();
-
-    // println!("{}, {nodes:?}", nodes.len());
-    // let triangles: Vec<_> = csv::ReaderBuilder::new()
-    //     .has_headers(false)
-    //     .from_path("data/hollow_cube_DV.tri")
-    //     .unwrap()
-    //     .records()
-    //     .enumerate()
-    //     .map(| (i, result)| {
-    //         println!("line: {i}");
-    //         let [a,b,c] = result.unwrap()
-    //             .into_iter()
-    //             .enumerate()
-    //             .map(|(index, c)| c.parse::<usize>().expect(&format!("Error paring index: {index}, c: {c}")))
-    //             .map(|index| (index - 1).into())
-    //             .collect::<Vec<_>>().try_into().unwrap();
-    //         debug!("a: {a}, b: {b}, c: {c}");
-    //         mesh.add_triangle_by_nodes(a, b, c).unwrap()
-    //     })
-    //     .collect();
-
-    // for (index, edge) in mesh.edges.iter().enumerate() {
-    //     println!("{index}: {edge:?}");
-    // }
     
     debug!("building mesh");
     let mut mesh = ClosedTriangleMesh::build(builder).unwrap();
@@ -146,44 +190,20 @@ fn setup(
         ..default()
     });
 
-    const SHAPES_X_EXTENT: f32 = 14.0;
-    const EXTRUSION_X_EXTENT: f32 = 16.0;
-    const Z_EXTENT: f32 = 5.0;
+    commands.spawn((
+        Mesh3d(meshes.add(mesh.build_mesh())),
+        MeshMaterial3d(debug_material), 
+        OrbifoldMesh(mesh)
+    ));
 
-    for triangle in mesh.build_many() {
-        debug!("spawning triangle");
-        commands.spawn((PbrBundle { 
-            mesh: meshes.add(triangle), 
-            material: debug_material.clone(),
-            // transform: Transform::from_rotation(Quat::from_rotation_x(-PI / 4.)),
-    
-            ..Default::default()
-        }, Shape));
-    }
-
-    // commands.spawn((PbrBundle { 
-    //     mesh: meshes.add(mesh.build()), 
-    //     material: debug_material.clone(),
-    //     // transform: Transform::from_rotation(Quat::from_rotation_x(-PI / 4.)),
-
-    //     ..Default::default()
-    // }, Shape));
-
-        // Transform for the camera and lighting, looking at (0,0,0) (the position of the mesh).
         let camera_and_light_transform =
         Transform::from_xyz(3.8, 3.8, 3.8).looking_at(Vec3::ZERO, Vec3::Y);
 
-    // Camera in 3D space.
-    commands.spawn(Camera3dBundle {
-        transform: camera_and_light_transform,
-        ..default()
-    });
+    commands.spawn((Camera3d::default(), camera_and_light_transform, CameraRotation { yaw: 0.0, pitch: 0.0 }));
+    commands.spawn((PointLight::default(), camera_and_light_transform));
 
-    // Light up the scene.
-    commands.spawn(PointLightBundle {
-        transform: camera_and_light_transform,
-        ..default()
-    });
+    window.cursor_options.grab_mode = CursorGrabMode::Locked; 
+    window.cursor_options.visible = false;
 
     /// Creates a colorful test pattern
 fn uv_debug_texture() -> Image {
