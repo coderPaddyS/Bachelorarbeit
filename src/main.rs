@@ -1,9 +1,10 @@
-use std::{f32::consts::PI, ops::{Deref, DerefMut}};
+use std::{f32::consts::PI, ffi::OsStr, ops::{Deref, DerefMut}, path::Path};
 
-use ba::{mesh::{FromMeshBuilder, Node, UnfinishedNode}, ClosedTriangleMesh};
+use ba::{mesh::{FromMeshBuilder, MeshBuilder, Node, UnfinishedNode}, ClosedTriangleMesh};
 use bevy::{app::{App, Startup}, ecs::query::QueryData, input::{keyboard::KeyboardInput, mouse::MouseMotion, ButtonState}, prelude::Commands, render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}, view::WindowSurfaces}, window::{CursorGrabMode, PrimaryWindow}, DefaultPlugins};
 use bevy::prelude::*;
 use bevy::prelude::Mesh as BMesh;
+use bevy_egui::{EguiContext, EguiContexts, EguiPlugin};
 use csv::StringRecord;
 use nalgebra::coordinates;
 
@@ -63,15 +64,99 @@ impl OrbifoldMesh {
     }
 }
 
+#[derive(Default)]
+struct FileDialog {
+    pub dialog: Option<egui_file::FileDialog>
+}
+
+impl FileDialog {
+    
+    fn openMesh() -> impl FnMut(
+            Res<ButtonInput<KeyCode>>,
+            EguiContexts,
+            ResMut<Assets<bevy::prelude::Mesh>>,
+            Single<(&mut Mesh3d, &mut OrbifoldMesh)>
+        ) -> ()
+    {
+        let mut file_dialog = Self { dialog: None };
+        return move |input_handler, mut contexts, mut meshes, mut query| {
+            if let Some(dialog) = &mut file_dialog.dialog {
+                println!("dialog open");
+                dialog.show(contexts.ctx_mut());
+                if dialog.selected() {
+                    let files = dialog.selection();
+                    if files.len() == 2 {
+                        let ver = files.iter().find(|path| path.extension() == Some(OsStr::new("ver"))).cloned();
+                        let tri = files.iter().find(|path| path.extension() == Some(OsStr::new("tri"))).cloned();
+                        if let (Some(ver), Some(tri)) = (ver, tri) {
+                            let mut builder = MeshBuilder::default();
+                            let nodes: Vec<_> = csv::ReaderBuilder::new()
+                                .has_headers(false)
+                                .from_path(ver)
+                                .unwrap()
+                                .records()
+                                .enumerate()
+                                .map(| (i, result)| {
+                                    println!("line: {i}");
+                                    let coordinates: [f32; 3] = result.unwrap()
+                                        .into_iter()
+                                        .enumerate()
+                                        .map(|(index, c)| c.parse::<f32>().expect(&format!("Error paring index: {index}, c: {c}"))).collect::<Vec<_>>().try_into().unwrap();
+                                    println!("{coordinates:?}");
+                                    builder.add_node(UnfinishedNode::new(coordinates))
+                                })
+                                .collect();
+                    
+                            println!("{}, {nodes:?}", nodes.len());
+                            let triangles: Vec<_> = csv::ReaderBuilder::new()
+                                .has_headers(false)
+                                .from_path(tri)
+                                .unwrap()
+                                .records()
+                                .enumerate()
+                                .map(| (i, result)| {
+                                    println!("line: {i}");
+                                    let [a,b,c] = result.unwrap()
+                                        .into_iter()
+                                        .enumerate()
+                                        .map(|(index, c)| c.parse::<usize>().expect(&format!("Error paring index: {index}, c: {c}")))
+                                        .map(|index| (index - 1).into())
+                                        .collect::<Vec<_>>().try_into().unwrap();
+                                    debug!("a: {a}, b: {b}, c: {c}");
+                                    builder.add_triangle_by_nodes(a, b, c).unwrap()
+                                })
+                                .collect();
+
+                            let (mut mesh, mut orbifold) = query.into_inner();
+                            orbifold.0 = ClosedTriangleMesh::build(builder).unwrap();
+                            mesh.0 = meshes.add(orbifold.build_mesh())
+                        } else {
+                            file_dialog.dialog = None;
+                        }
+                    } else {
+                        file_dialog.dialog = None;
+                    }
+                }
+            } else if input_handler.just_pressed(KeyCode::KeyO) {
+                println!("open file");
+                let file_filter = Box::new({
+                    let extensions = [Some(OsStr::new("tri")), Some(OsStr::new("ver"))];
+                    move |path: &Path| -> bool { extensions.contains(&path.extension())}
+                });
+                let mut dialog = egui_file::FileDialog::open_file(None).show_files_filter(file_filter).multi_select(true);
+                dialog.open();
+                file_dialog.dialog = Some(dialog);
+            }
+        }
+    }
+}
 fn main() {
-
-    pretty_env_logger::init();
-
     App::new()
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+        .add_plugins(DefaultPlugins)
+        .add_plugins(EguiPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, (input_handler, mouse_rotation, move_camera, collapse_edge).chain())
-        // .add_systems(Update, rotate)
+        .add_systems(Update,  FileDialog::openMesh())
+        .add_systems(Update, (input_handler, mouse_rotation, move_camera, collapse_edge))
         .run();
 }
 
@@ -157,7 +242,7 @@ fn mouse_rotation(
 
         // Apply rotation
         // Quat::from_rotation_y(yaw) + Quat::from_rotation_x(angle)
-        transform.rotation = Quat::from_euler(EulerRot::ZYX, rotation.yaw.to_radians(), rotation.pitch.to_radians(), 0.0);
+        transform.rotation = Quat::from_euler(EulerRot::XYZ, rotation.yaw.to_radians(), rotation.pitch.to_radians(), 0.0);
     }
 }
 

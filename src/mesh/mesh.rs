@@ -2,7 +2,7 @@ use std::collections::BinaryHeap;
 
 use apply::{Also, Apply};
 use log::{debug, info, error};
-use priority_queue::PriorityQueue;
+use priority_queue::{DoublePriorityQueue, PriorityQueue};
 
 use super::{Edge, Facette, FromMeshBuilder, Index, List, MeshBuilder, MeshError, Node};
 
@@ -38,7 +38,7 @@ pub struct ClosedTriangleMesh {
     pub nodes: List<Node>,
     pub edges: List<Edge>, 
     pub triangles: List<Facette>,
-    pub contraction_order: PriorityQueue<Index<Edge>, usize>,
+    pub contraction_order: DoublePriorityQueue<Index<Edge>, usize>,
     pub undo_contraction: Vec<TriangleMeshHalfEdgeCollapse>
 }
 
@@ -107,7 +107,7 @@ impl FromMeshBuilder for ClosedTriangleMesh {
             })))
             .collect();
         let mut mesh = Self { 
-            contraction_order: PriorityQueue::with_capacity(edges.len()),
+            contraction_order: DoublePriorityQueue::with_capacity(edges.len()),
             nodes: List::new(nodes), 
             edges, 
             triangles:  List::new(triangles),
@@ -232,7 +232,7 @@ impl ClosedTriangleMesh {
     }
 
     pub fn contract_next_edge(&mut self) -> TriangleMeshHalfEdgeCollapse {
-        let next = self.contraction_order.pop();
+        let next = self.contraction_order.pop_min();
         self.contract_edge(next.unwrap().0)
     }
 
@@ -666,6 +666,10 @@ mod tests {
             assert_eq!(orig.is_some(), copy.is_some(), "edges are different at {index}");
             let (orig, copy) = (orig.clone().unwrap(), copy.clone().unwrap());
             assert_eq!(orig, copy, "edges are different at {index}");
+            assert_eq!(orig.next, copy.next, "edges are different at {index}: next: {}, {}", orig.next, copy.next);
+            assert_eq!(orig.previous, copy.previous, "edges are different at {index}: previous: {}, {}", orig.previous, copy.previous);
+            assert_eq!(orig.opposite, copy.opposite, "edges are different at {index}: opposite: {}, {}", orig.opposite, copy.opposite);
+            assert_eq!(orig.facette, copy.facette, "edges are different at {index}: facette: {}, {}", orig.facette, copy.facette);
         }
         assert_eq!(copy.triangles, mesh.triangles);
     }
