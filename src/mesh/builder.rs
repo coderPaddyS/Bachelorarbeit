@@ -3,7 +3,7 @@ use log::{debug, info};
 use nalgebra::Vector3;
 use thiserror::Error;
 
-use super::{ClosedTriangleMesh, Edge, Index, List, MeshError, Node, Facette};
+use super::{ClosedTriangleMesh, Edge, Index, List, MeshError, Node, Triangle};
 
 #[derive(Debug, Error)]
 pub enum MeshBuilderError {
@@ -57,7 +57,7 @@ impl Into<Edge> for UnfinishedHalfEdge {
             opposite: (*self.opposite).into(),
             previous: (*self.previous.unwrap()).into(),
             next: (*self.next.unwrap()).into(),
-            facette: (*self.facette.unwrap()).into()
+            triangle: (*self.facette.unwrap()).into()
         }
     }
 }
@@ -67,10 +67,10 @@ pub struct UnfinishedTriangle {
     pub corners: [Index<UnfinishedNode>; 3],
 }
 
-impl Into<Facette> for UnfinishedTriangle {
-    fn into(self) -> Facette {
-        Facette {
-            corners: self.corners.map(|idx| Index::new(*idx)).to_vec()
+impl Into<Triangle> for UnfinishedTriangle {
+    fn into(self) -> Triangle {
+        Triangle {
+            corners: self.corners.map(|idx| Index::new(*idx))
         }
     }
 }

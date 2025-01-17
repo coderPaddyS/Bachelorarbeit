@@ -37,7 +37,7 @@ pub struct Edge {
     pub opposite: Index<Edge>,
     pub previous: Index<Edge>,
     pub next: Index<Edge>,
-    pub facette: Index<Facette>,
+    pub triangle: Index<Triangle>,
 }
 
 impl PartialEq for Edge {
@@ -47,19 +47,18 @@ impl PartialEq for Edge {
 }
 
 impl Eq for Edge {}
-
-#[derive(Clone, Debug, Default)]
-pub struct Facette {
-    pub corners: Vec<Index<Node>>,
+#[derive(Clone, Debug)]
+pub struct Triangle {
+    pub corners: [Index<Node>; 3],
 }
 
-impl std::hash::Hash for Facette {
+impl std::hash::Hash for Triangle {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.corners.iter().for_each(|node| node.hash(state));
     }
 }
 
-impl PartialEq for Facette {
+impl PartialEq for Triangle {
     fn eq(&self, other: &Self) -> bool {
         if self.corners.len() != other.corners.len() {
             return false
