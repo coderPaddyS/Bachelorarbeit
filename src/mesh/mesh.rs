@@ -4,28 +4,30 @@ use apply::{Also, Apply};
 use log::{debug, info, error};
 use priority_queue::{DoublePriorityQueue, PriorityQueue};
 
-use super::{Edge, Facette, FromMeshBuilder, Index, List, MeshBuilder, MeshError, Node};
+use super::{Edge, Triangle, FromMeshBuilder, Index, List, MeshBuilder, MeshError, Node};
 
-// impl From<TriangleMeshEdge> for ClosedTriangleMeshEdge {
-//     fn from(value: TriangleMeshEdge) -> Self {
-//         Self {
-//             source: value.source,
-//             target: value.target,
-//             opposite: value.opposite,
-//             previous: value.previous.unwrap(),
-//             next: value.next.unwrap(),
-//             triangle: value.triangle.unwrap()
-//         }
-//     }
-// }
+pub struct MeshTriangleInfo {
+    pub nodes: Vec<[f32; 3]>,
+    pub triangles: Vec<(usize, [u8; 4])>,
+}
 
-#[derive(Clone)]
+pub trait MeshData: Sized {
+    fn build_mesh(mesh: &ClosedTriangleMesh<Self>) -> Option<MeshTriangleInfo>;
+}
+
+impl MeshData for () {
+    fn build_mesh(_: &ClosedTriangleMesh<Self>) -> Option<MeshTriangleInfo> {
+        None
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct TriangleMeshHalfEdgeCollapse {
     pub source: (Index<Node>, Node),
     pub target: Index<Node>,
-    pub facettes: Vec<Index<Facette>>,
+    pub facettes: Vec<Index<Triangle>>,
     pub removed_edges: Vec<(Index<Edge>, Edge)>,
-    pub removed_facettes: [(Index<Facette>, Option<Facette>); 2],
+    pub removed_facettes: [(Index<Triangle>, Option<Triangle>); 2],
 }
 
 pub enum HalfEdgeExpansionEvent {
@@ -34,15 +36,19 @@ pub enum HalfEdgeExpansionEvent {
 }
 
 #[derive(Clone)]
-pub struct ClosedTriangleMesh {
+pub struct ClosedTriangleMesh<TriangleData = ()>
+where 
+    TriangleData: MeshData    
+{
     pub nodes: List<Node>,
     pub edges: List<Edge>, 
-    pub triangles: List<Facette>,
+    pub triangles: List<Triangle>,
+    pub triangle_data: List<TriangleData, Triangle>,
     pub contraction_order: DoublePriorityQueue<Index<Edge>, usize>,
     pub undo_contraction: Vec<TriangleMeshHalfEdgeCollapse>
 }
 
-impl core::ops::Index<Index<Node>> for ClosedTriangleMesh {
+impl<TD: MeshData> core::ops::Index<Index<Node>> for ClosedTriangleMesh<TD> {
     type Output = <List<Node> as core::ops::Index<Index<Node>>>::Output;
 
     fn index(&self, index: Index<Node>) -> &Self::Output {
@@ -50,13 +56,13 @@ impl core::ops::Index<Index<Node>> for ClosedTriangleMesh {
     }
 }
 
-impl core::ops::IndexMut<Index<Node>> for ClosedTriangleMesh {
+impl<TD: MeshData> core::ops::IndexMut<Index<Node>> for ClosedTriangleMesh<TD> {
     fn index_mut(&mut self, index: Index<Node>) -> &mut Self::Output {
         &mut self.nodes[index]
     }
 }
 
-impl core::ops::Index<Index<Edge>> for ClosedTriangleMesh {
+impl<TD: MeshData> core::ops::Index<Index<Edge>> for ClosedTriangleMesh<TD> {
     type Output = <List<Edge> as core::ops::Index<Index<Edge>>>::Output;
 
     fn index(&self, index: Index<Edge>) -> &Self::Output {
@@ -64,31 +70,31 @@ impl core::ops::Index<Index<Edge>> for ClosedTriangleMesh {
     }
 }
 
-impl core::ops::IndexMut<Index<Edge>> for ClosedTriangleMesh {
+impl<TD: MeshData> core::ops::IndexMut<Index<Edge>> for ClosedTriangleMesh<TD> {
     fn index_mut(&mut self, index: Index<Edge>) -> &mut Self::Output {
         &mut self.edges[index]
     }
 }
 
-impl core::ops::Index<Index<Facette>> for ClosedTriangleMesh {
-    type Output = <List<Facette> as core::ops::Index<Index<Facette>>>::Output;
+impl<TD: MeshData> core::ops::Index<Index<Triangle>> for ClosedTriangleMesh<TD> {
+    type Output = <List<Triangle> as core::ops::Index<Index<Triangle>>>::Output;
 
-    fn index(&self, index: Index<Facette>) -> &Self::Output {
+    fn index(&self, index: Index<Triangle>) -> &Self::Output {
         &self.triangles[index]
     }
 }
 
-impl core::ops::IndexMut<Index<Facette>> for ClosedTriangleMesh {
-    fn index_mut(&mut self, index: Index<Facette>) -> &mut Self::Output {
+impl<TD: MeshData> core::ops::IndexMut<Index<Triangle>> for ClosedTriangleMesh<TD> {
+    fn index_mut(&mut self, index: Index<Triangle>) -> &mut Self::Output {
         &mut self.triangles[index]
     }
 }
 
-impl FromMeshBuilder for ClosedTriangleMesh {
-    fn build(builder: super::MeshBuilder) -> Result<super::ClosedTriangleMesh, super::MeshBuilderError> {
+impl<TD: MeshData> FromMeshBuilder for ClosedTriangleMesh<TD> {
+    fn build(builder: super::MeshBuilder) -> Result<super::ClosedTriangleMesh<TD>, super::MeshBuilderError> {
         // builder.triangles.iter().enumerate().for_each(|(idx, triangle)| debug!("Triangle index: {idx}, Triangle: {triangle:?}"));
         let MeshBuilder { nodes, edges, facettes } = builder;
-        let triangles = facettes
+        let triangles: Vec<_> = facettes
             .take()
             .into_iter()
             .map(|facette| facette.map(|facette| facette.into()))
@@ -110,6 +116,7 @@ impl FromMeshBuilder for ClosedTriangleMesh {
             contraction_order: DoublePriorityQueue::with_capacity(edges.len()),
             nodes: List::new(nodes), 
             edges, 
+            triangle_data: List::with_capacity(triangles.len()),
             triangles:  List::new(triangles),
             undo_contraction: Vec::new()
         };
@@ -118,7 +125,37 @@ impl FromMeshBuilder for ClosedTriangleMesh {
     }
 }
 
-impl ClosedTriangleMesh {
+impl<TD: MeshData> ClosedTriangleMesh<TD> {
+    
+    pub fn build_mesh(&self) -> MeshTriangleInfo {
+        if let Some(info) = TD::build_mesh(self) {
+            return info;
+        }
+
+        let (colors, nodes): (Vec<[u8; 4]>, Vec<[f32; 3]>) = self.triangles
+            .iter()
+            .cloned()
+            .filter_map(|tri| {
+                match tri {
+                    None => None,
+                    Some(tri) => {
+                        let color: [u8; 4] = [rand::random(), rand::random(), rand::random(), 128];
+                        let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
+                        // let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
+
+                        Some((color, nodes))
+                    }
+                }
+            })
+            .map(|(color, nodes)| {
+                nodes.into_iter().map(move |node| (color, node))
+            })
+            .flatten()
+            .unzip();
+
+        let triangles = (0..nodes.len()).into_iter().zip(colors).collect();
+        MeshTriangleInfo { nodes, triangles }
+    }
 
     pub fn has_node(&self, node: Index<Node>) -> bool {
         if (0..self.nodes.len()).contains(&node) {
@@ -222,9 +259,17 @@ impl ClosedTriangleMesh {
     }
 
     fn collect_outgoing_edges_with_edges(edges: &List<Edge>, node: &Node) -> Vec<Index<Edge>> {
-        let mut edge = Self::next_outgoing_with_edges(&edges, node.outgoing[0]);
+        Self::collect_outgoing_edges_with_edges_starting_with(edges, node, node.outgoing[0])
+    }
+
+    fn collect_outgoing_edges_starting_with(&self, index: Index<Node>, edge: Index<Edge>) -> Vec<Index<Edge>> {
+        Self::collect_outgoing_edges_with_edges_starting_with(&self.edges, self[index].as_ref().unwrap(), edge)
+    }
+
+    fn collect_outgoing_edges_with_edges_starting_with(edges: &List<Edge>, node: &Node, starting_edge: Index<Edge>) -> Vec<Index<Edge>> {
+        let mut edge = Self::next_outgoing_with_edges(&edges, starting_edge);
         let mut outgoing = vec![edge];
-        while edge != node.outgoing[0] {
+        while edge != starting_edge {
             edge = Self::next_outgoing_with_edges(&edges, edge);
             outgoing.push(edge);
         }
@@ -265,16 +310,16 @@ impl ClosedTriangleMesh {
         let mut facettes = vec![];
         let outgoing = source.outgoing.clone().into_iter().filter(|index| self[*index].is_some()).collect::<Vec<_>>();
         for outgoing in outgoing {
-            let index = self[outgoing].as_ref().unwrap().facette;
+            let index = self[outgoing].as_ref().unwrap().triangle;
 
             // Remember all indices of facettes which had s as corner but not t.
             // Those are later needed to uncontract the mesh.
-            if index != st.facette && index != ts.facette {
+            if index != st.triangle && index != ts.triangle {
                 facettes.push(index)
             } 
 
             let facette = self[index].as_mut().unwrap();
-            println!("HEC: Facette: {facette:?}");
+            println!("HEC: Triangle: {facette:?}");
             for corner in &mut facette.corners {
                 if *corner == st.source {
                     debug!("HEC: Replacing corner {corner} with target {}", st.target);
@@ -287,21 +332,22 @@ impl ClosedTriangleMesh {
             self[opposite].as_mut().unwrap().target = st.target;
         }
         
-        let st_facette = std::mem::take(&mut self[st.facette]);
-        let ts_facette = std::mem::take(&mut self[ts.facette]);
+        let st_facette = std::mem::take(&mut self[st.triangle]);
+        let ts_facette = std::mem::take(&mut self[ts.triangle]);
         
         let ta = st.next;
+        let at = self[ta].as_ref().unwrap().opposite;
         let dt = ts.previous;
         let td = self[dt].as_ref().unwrap().opposite;
     
         let _as = std::mem::take(&mut self[st.previous]).unwrap();
         let sa = std::mem::take(&mut self[_as.opposite]).unwrap();
 
-        let ds = std::mem::take(&mut self[ts.next]).unwrap();
-        let sd = std::mem::take(&mut self[ds.opposite]).unwrap();
+        let sd = std::mem::take(&mut self[ts.next]).unwrap();
+        let ds = std::mem::take(&mut self[sd.opposite]).unwrap();
 
-        let (ab, bs, facette_sa) = (sa.next, sa.previous, sa.facette);
-        let (sc, cd, facette_sd) = (sd.next, sd.previous, sd.facette);
+        let (ab, bs, facette_sa) = (sa.next, sa.previous, sa.triangle);
+        let (sc, cd, facette_ds) = (ds.next, ds.previous, ds.triangle);
 
         self[ab].as_mut().map(|edge| edge.previous = ta);
         self[ab].as_mut().map(|edge| edge.previous = ta);
@@ -310,10 +356,10 @@ impl ClosedTriangleMesh {
         let previous = if self[sa.previous].as_ref().is_some() { sa.previous } else { dt };
         self[ta].as_mut().map(|edge| edge.next = ab);
         self[ta].as_mut().map(|edge| edge.previous = previous);
-        self[ta].as_mut().map(|edge| edge.facette = facette_sa);
+        self[ta].as_mut().map(|edge| edge.triangle = facette_sa);
 
-        let (next, previous) = if let Some(edge) = self[sd.next].as_ref() {
-            (sd.next, edge.next)
+        let (next, previous) = if let Some(edge) = self[ds.next].as_ref() {
+            (ds.next, edge.next)
         } else {
             let t_outgoing = self[st.target].as_ref().unwrap().outgoing.clone().also(|it| {
                 let rotate_by = it.iter().enumerate().find(|(_, edge)| **edge == td).unwrap().0;
@@ -341,16 +387,19 @@ impl ClosedTriangleMesh {
         self[cd].as_mut().map(|edge| edge.next = dt);
         self[dt].as_mut().map(|edge| edge.next = next);
         self[dt].as_mut().map(|edge| edge.previous = previous);
-        self[dt].as_mut().map(|edge| edge.facette = facette_sd);
+        self[dt].as_mut().map(|edge| edge.triangle = facette_ds);
 
+        // Rescan all nodes who had at least one edge removed
         self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges(ts.source);
+        self[sa.target].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(sa.target, at);
+        self[sd.target].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(sd.target, dt);
 
         let info = TriangleMeshHalfEdgeCollapse {
             source: (st.source, source.clone()),
             target: st.target,
             facettes,
-            removed_facettes: [(st.facette, st_facette), (ts.facette, ts_facette)],
-            removed_edges: vec![(_as.opposite, sa), (st.previous, _as), (ds.opposite, sd), (ts.next, ds), (st.opposite, ts), (index, st)],
+            removed_facettes: [(st.triangle, st_facette), (ts.triangle, ts_facette)],
+            removed_edges: vec![(_as.opposite, sa), (st.previous, _as), (sd.opposite, ds), (ts.next, sd), (st.opposite, ts), (index, st)],
         };
         self.update_contraction_order(info.removed_edges.iter().map(|(index,_) | index));
         self.undo_contraction.push(info.clone());
@@ -377,7 +426,7 @@ impl ClosedTriangleMesh {
 
         let removed_edge_indices = removed_edges.iter().map(|(i, _)| i).cloned().collect::<Vec<_>>();
         for (index, edge) in removed_edges {
-            self[index] = Some(edge)
+            self[index] = Some(edge);
         }
 
         for (index, facette) in removed_facettes {
@@ -395,13 +444,13 @@ impl ClosedTriangleMesh {
         self[st.next].as_mut().unwrap().apply(|it| {
             it.previous = idx_st;
             it.next = st.previous;
-            it.facette = st.facette;
+            it.triangle = st.triangle;
         });
         let ts = self[st.opposite].as_ref().cloned().unwrap();
         self[ts.previous].as_mut().unwrap().apply(|it| {
             it.next = st.opposite;
             it.previous = ts.next;
-            it.facette = ts.facette;
+            it.triangle = ts.triangle;
         });
 
         for index in facettes {
@@ -421,15 +470,19 @@ impl ClosedTriangleMesh {
             let opposite = self[edge].as_ref().unwrap().opposite;
             self[opposite].as_mut().unwrap().next = source.outgoing[indices[i]];
             self[source.outgoing[indices[i]]].as_mut().unwrap().previous = opposite;
-            let (a, next, previous, facette) = self[edge].as_ref().unwrap().apply(|it| (it.source, it.next, it.previous, it.facette));
+            let (a, next, previous, facette) = self[edge].as_ref().unwrap().apply(|it| (it.source, it.next, it.previous, it.triangle));
             let (b, c) = self[next].as_mut().unwrap().apply(|it| {
                 it.next = previous;
                 it.previous = edge;
-                it.facette = facette;
+                it.triangle = facette;
                 (it.source, it.target)
             });
-            self[facette].as_mut().unwrap().corners = vec![a, b, c];
+            self[facette].as_mut().unwrap().corners = [a, b, c];
         }
+        let (ta, a) = (st.next, self[st.next].as_ref().unwrap().target);
+        let (dt, d) = self[st.opposite].as_ref().unwrap().apply(|it| (it.previous, self[it.previous].as_ref().unwrap().source));
+        self[a].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(a, self[ta].as_ref().unwrap().opposite);
+        self[d].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(d, dt);
 
         self.update_contraction_order(removed_edge_indices.iter());
     }
@@ -494,7 +547,7 @@ mod tests {
         let mesh = cube();
         for node in mesh.nodes.take().into_iter().map(|node| node.unwrap()) {
             for (index, edge) in node.outgoing.iter().cloned().enumerate() {
-                assert_eq!(ClosedTriangleMesh::next_outgoing_with_edges(&mesh.edges, edge), node.outgoing[(index + 1) % node.outgoing.len()]);
+                assert_eq!(ClosedTriangleMesh::<()>::next_outgoing_with_edges(&mesh.edges, edge), node.outgoing[(index + 1) % node.outgoing.len()]);
             }
         }
 
@@ -533,8 +586,8 @@ mod tests {
             assert_eq!(ca.next, idx_ab);
             assert_eq!(ca.previous, idx_bc);
 
-            assert_eq!(ab.facette, bc.facette);
-            assert_eq!(bc.facette, ca.facette);
+            assert_eq!(ab.triangle, bc.triangle);
+            assert_eq!(bc.triangle, ca.triangle);
         }
 
         Ok(())
@@ -630,14 +683,20 @@ mod tests {
             assert_eq!(ca.next, idx_ab);
             assert_eq!(ca.previous, idx_bc);
 
-            assert_eq!(ab.facette, bc.facette);
-            assert_eq!(bc.facette, ca.facette);
+            assert_eq!(ab.triangle, bc.triangle);
+            assert_eq!(bc.triangle, ca.triangle);
 
-            let facette = mesh[ab.facette].as_ref().unwrap();
+            let facette = mesh[ab.triangle].as_ref().unwrap();
             assert_eq!(facette.corners.len(), 3);
             for edge in [ab, bc, ca] {
                 assert!(facette.corners.contains(&edge.source))
             }
+        }
+
+        // Check that each edge has the correct opposite edge
+        for [edge, opposite] in [[2.into(), 3.into()], [14.into(), 15.into()], [18.into(), 19.into()]] as [[Index<Edge>; 2]; 3] {
+            assert_eq!(mesh[edge].as_ref().unwrap().opposite, opposite);
+            assert_eq!(mesh[opposite].as_ref().unwrap().opposite, edge);
         }
 
         Ok(())
@@ -649,6 +708,9 @@ mod tests {
         let copy = mesh.clone();
         let contraction = mesh.contract_edge(0.into());
         mesh.uncontract_edge(contraction);
+        assert_eq!(copy.nodes.len(), mesh.nodes.len());
+        assert_eq!(copy.edges.len(), mesh.edges.len());
+        assert_eq!(copy.triangles.len(), mesh.triangles.len());
         copy.nodes.iter().zip(mesh.nodes.iter()).for_each(|(orig, node)| {
             assert_eq!(orig.is_some(), node.is_some());
             if orig.is_some() {
@@ -669,7 +731,76 @@ mod tests {
             assert_eq!(orig.next, copy.next, "edges are different at {index}: next: {}, {}", orig.next, copy.next);
             assert_eq!(orig.previous, copy.previous, "edges are different at {index}: previous: {}, {}", orig.previous, copy.previous);
             assert_eq!(orig.opposite, copy.opposite, "edges are different at {index}: opposite: {}, {}", orig.opposite, copy.opposite);
-            assert_eq!(orig.facette, copy.facette, "edges are different at {index}: facette: {}, {}", orig.facette, copy.facette);
+            assert_eq!(orig.triangle, copy.triangle, "edges are different at {index}: facette: {}, {}", orig.triangle, copy.triangle);
+        }
+        assert_eq!(copy.triangles, mesh.triangles);
+    }
+
+    #[test]
+    fn cube_hec_redo() {
+        let mut mesh = cube();
+        let copy = mesh.clone();
+        let contraction = mesh.contract_edge(0.into());
+        mesh.uncontract_edge(contraction.clone());
+        let other_contraction = mesh.contract_edge(0.into());
+        assert_eq!(contraction, other_contraction);
+        mesh.uncontract_edge(other_contraction);
+        copy.nodes.iter().zip(mesh.nodes.iter()).for_each(|(orig, node)| {
+            assert_eq!(orig.is_some(), node.is_some());
+            if orig.is_some() {
+                let (orig, node) = (orig.clone().unwrap(), node.clone().unwrap());
+                assert_eq!(orig.coordinates, node.coordinates);
+                for outgoing in &orig.outgoing {
+                    assert!(node.outgoing.contains(outgoing))
+                }
+                for outgoing in &node.outgoing {
+                    assert!(orig.outgoing.contains(outgoing))
+                }
+            }
+        });
+        for (index, (orig, copy)) in copy.edges.iter().zip(mesh.edges.iter()).enumerate() {
+            assert_eq!(orig.is_some(), copy.is_some(), "edges are different at {index}");
+            let (orig, copy) = (orig.clone().unwrap(), copy.clone().unwrap());
+            assert_eq!(orig, copy, "edges are different at {index}");
+            assert_eq!(orig.next, copy.next, "edges are different at {index}: next: {}, {}", orig.next, copy.next);
+            assert_eq!(orig.previous, copy.previous, "edges are different at {index}: previous: {}, {}", orig.previous, copy.previous);
+            assert_eq!(orig.opposite, copy.opposite, "edges are different at {index}: opposite: {}, {}", orig.opposite, copy.opposite);
+            assert_eq!(orig.triangle, copy.triangle, "edges are different at {index}: facette: {}, {}", orig.triangle, copy.triangle);
+        }
+        assert_eq!(copy.triangles, mesh.triangles);
+    }
+
+    #[test]
+    fn cube_next_hec_twice() {
+        let mut mesh = cube();
+        let copy = mesh.clone();
+        let first = mesh.contract_next_edge();
+        let next = mesh.contraction_order.peek_min();
+        println!("next: {:?}", mesh.contraction_order.peek_min());
+        let second = mesh.contract_next_edge();
+        mesh.uncontract_next_edge();
+        mesh.uncontract_next_edge();
+        copy.nodes.iter().zip(mesh.nodes.iter()).for_each(|(orig, node)| {
+            assert_eq!(orig.is_some(), node.is_some());
+            if orig.is_some() {
+                let (orig, node) = (orig.clone().unwrap(), node.clone().unwrap());
+                assert_eq!(orig.coordinates, node.coordinates);
+                for outgoing in &orig.outgoing {
+                    assert!(node.outgoing.contains(outgoing))
+                }
+                for outgoing in &node.outgoing {
+                    assert!(orig.outgoing.contains(outgoing))
+                }
+            }
+        });
+        for (index, (orig, copy)) in copy.edges.iter().zip(mesh.edges.iter()).enumerate() {
+            assert_eq!(orig.is_some(), copy.is_some(), "edges are different at {index}");
+            let (orig, copy) = (orig.clone().unwrap(), copy.clone().unwrap());
+            assert_eq!(orig, copy, "edges are different at {index}");
+            assert_eq!(orig.next, copy.next, "edges are different at {index}: next: {}, {}", orig.next, copy.next);
+            assert_eq!(orig.previous, copy.previous, "edges are different at {index}: previous: {}, {}", orig.previous, copy.previous);
+            assert_eq!(orig.opposite, copy.opposite, "edges are different at {index}: opposite: {}, {}", orig.opposite, copy.opposite);
+            assert_eq!(orig.triangle, copy.triangle, "edges are different at {index}: facette: {}, {}", orig.triangle, copy.triangle);
         }
         assert_eq!(copy.triangles, mesh.triangles);
     }
