@@ -4,3 +4,5 @@
 
 pub mod mesh;
 pub use mesh::ClosedTriangleMesh;
+
+pub mod projective_structure;
