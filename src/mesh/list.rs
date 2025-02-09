@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, ops::{Deref, DerefMut}, usize};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Hash)]
 pub struct Index<T> {
     index: usize,
     _data: PhantomData<T>
@@ -40,6 +40,13 @@ impl<T> Clone for Index<T> {
     }
 }
 
+impl<T> PartialEq for Index<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
+    }
+}
+impl<T> Eq for Index<T> {}
+
 impl<T> Index<T> {
     pub fn new(index: usize) -> Self {
         Self { index: index, _data: PhantomData::default() }
@@ -71,20 +78,20 @@ impl<T, I> core::ops::IndexMut<Index<I>> for List<T, I> {
     }
 }
 
-impl<T> Default for List<T> {
+impl<T, I> Default for List<T, I> {
     fn default() -> Self {
         Self(Vec::default(), PhantomData)
     }
 }
 
-impl<T> Deref for List<T> {
+impl<T, I> Deref for List<T, I> {
     type Target = Vec<Option<T>>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T> DerefMut for List<T> {
+impl<T, I> DerefMut for List<T, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
