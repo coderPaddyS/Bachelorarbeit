@@ -1,3 +1,3 @@
-pub trait TriangleMeshRenderer {
+pub trait MeshRenderer {
     
 }

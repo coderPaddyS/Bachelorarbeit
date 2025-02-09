@@ -20,7 +20,7 @@ pub trait FromMeshBuilder where Self: Sized {
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnfinishedNode {
     // pub label: String,
-    pub coordinates: [f32; 3],
+    pub coordinates: [f64; 3],
     pub outgoing: Vec<Index<UnfinishedHalfEdge>>,
 }
 
@@ -35,6 +35,9 @@ impl Into<Node> for UnfinishedNode {
 
 impl UnfinishedNode {
     pub fn new(coordinates: [f32; 3]) -> Self {
+        Self { outgoing: vec![], coordinates: coordinates.map(|c| c as f64) }
+    }
+    pub fn new_f64(coordinates: [f64; 3]) -> Self {
         Self { outgoing: vec![], coordinates }
     }
 }

@@ -1,7 +1,9 @@
 #![feature(array_try_map)]
 #![feature(let_chains)]
 #![feature(negative_impls)]
-
+#![feature(type_changing_struct_update)]
+#![feature(generic_const_exprs)]
+#![feature(iter_array_chunks)]
 pub mod mesh;
 pub use mesh::ClosedTriangleMesh;
 

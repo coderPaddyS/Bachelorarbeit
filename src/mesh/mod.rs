@@ -1,6 +1,7 @@
 mod list;
 mod mesh;
 mod builder;
+mod reduction;
 
 use std::collections::HashSet;
 
@@ -13,7 +14,7 @@ pub use list::*;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     // pub label: String,
-    pub coordinates: [f32; 3],
+    pub coordinates: [f64; 3],
     pub outgoing: Vec<Index<Edge>>,
 }
 
@@ -25,7 +26,7 @@ impl std::hash::Hash for Node {
 }
 
 impl Node {
-    pub fn new(coordinates: [f32; 3]) -> Self {
+    pub fn new(coordinates: [f64; 3]) -> Self {
         Self { outgoing: vec![], coordinates }
     }
 }
