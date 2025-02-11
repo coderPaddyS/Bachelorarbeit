@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use apply::Apply;
 use bevy::{ecs::system::IntoSystem, math::Vec3};
 use itertools::Itertools;
-use nalgebra::{zero, ArrayStorage, Const, DMatrix, DVector, Matrix4, Matrix4x1, Matrix4x3, MatrixMN, RowVector, SMatrix, SVector, ToTypenum, UninitVector, Vector2, Vector3, Vector4, Vector6, VectorN};
+use levenberg_marquardt::{LeastSquaresProblem, LevenbergMarquardt};
+use nalgebra::{zero, ArrayStorage, Const, DMatrix, DVector, Dyn, Matrix4, Matrix4x1, Matrix4x3, MatrixMN, RowVector, SMatrix, SVector, ToTypenum, UninitVector, Vector2, Vector3, Vector4, Vector6, VectorN};
 
 use crate::{mesh::{Edge, Index, List, MeshData, MeshTriangleInfo, Node, Triangle, TriangleMesh, TriangleMeshHalfEdgeCollapse}, ClosedTriangleMesh};
 
@@ -255,20 +256,7 @@ impl ClosedTriangleMesh<SubdividedTriangleData> {
 
     pub fn calculate_projective_structure(self, target_error: f64, max_iterations: u32) -> ClosedTriangleMesh</* TODO: correct type */()> { 
         let mut equations = CEquations::new(&self);
-        /*TODO: possibly transform c_conditions in correct type by e.g. combining with weights */
-        let mut solution = equations.calculate();
-        let mut iteration = 0;
-        while iteration < max_iterations {
-            equations = equations.improve_values();
-            let next_solution = equations.calculate();
-
-            println!("iteration: {iteration}, diff: {:?}, sol: {:?}", (&solution - &next_solution).norm(), &next_solution.norm());
-            if (solution - &next_solution).norm() < target_error {
-                break;
-            }
-            iteration += 1;
-            solution = next_solution;
-        }
+        let (equations, report) = LevenbergMarquardt::new().minimize(equations);
         ClosedTriangleMesh::</* TODO: correct type */()> { triangle_data: List::with_defaults(self.triangles.len()), ..self }
     }
 }
@@ -311,7 +299,7 @@ struct CEquations<'M, TM: TriangleMesh + 'M> {
     mesh: &'M TM,
 }
 
-impl<'M, TM: TriangleMesh + 'static> CEquations<'M, TM> {
+impl<'M, TM: TriangleMesh> CEquations<'M, TM> {
     fn new(mesh: &'M TM) -> Self {
         let N = mesh.current_edges().len();
         let mut mapping = Vec::<(Index<Edge>, Index<Edge>)>::with_capacity(N);
@@ -537,6 +525,28 @@ impl<'M, TM: TriangleMesh + 'static> CEquations<'M, TM> {
             mesh: &self.mesh,
             parameters: CEquationParameters::from_vec(x)
         }
+    }
+}
+
+impl<'M, TM: TriangleMesh> LeastSquaresProblem<f64, Dyn, Dyn> for CEquations<'M, TM> {
+    type ResidualStorage = nalgebra::storage::Owned<f64, Dyn>;
+    type JacobianStorage = nalgebra::storage::Owned<f64, Dyn, Dyn>;
+    type ParameterStorage = nalgebra::storage::Owned<f64, Dyn>;
+
+    fn set_params(&mut self, x: &nalgebra::Vector<f64, Dyn, Self::ParameterStorage>) {
+        self.parameters = CEquationParameters::from_vec(x.clone())
+    }
+
+    fn params(&self) -> nalgebra::Vector<f64, Dyn, Self::ParameterStorage> {
+        self.parameters.to_vec()
+    }
+
+    fn jacobian(&self) -> Option<nalgebra::Matrix<f64, Dyn, Dyn, Self::JacobianStorage>> {
+        Some(self.derivative())
+    }
+
+    fn residuals(&self) -> Option<nalgebra::Vector<f64, Dyn, Self::ResidualStorage>> {
+        Some(self.calculate())
     }
 }
 

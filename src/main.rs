@@ -1,7 +1,9 @@
+#![feature(iter_array_chunks)]
+
 use std::{f32::consts::PI, ffi::OsStr, ops::{Deref, DerefMut}, path::Path};
 
-use ba::{mesh::{FromMeshBuilder, MeshBuilder, Node, UnfinishedNode}, ClosedTriangleMesh};
-use bevy::{app::{App, Startup}, ecs::query::QueryData, input::{keyboard::KeyboardInput, mouse::MouseMotion, ButtonState}, prelude::Commands, render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}, view::WindowSurfaces}, window::{CursorGrabMode, PrimaryWindow}, DefaultPlugins};
+use ba::{mesh::{FromMeshBuilder, Index, MeshBuilder, MeshTriangleInfo, Node, UnfinishedNode}, projective_structure::SubdiviveMesh, ClosedTriangleMesh};
+use bevy::{app::{App, Startup}, ecs::query::QueryData, input::{keyboard::KeyboardInput, mouse::MouseMotion, ButtonState}, prelude::Commands, render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}, view::WindowSurfaces}, utils::hashbrown::HashMap, window::{CursorGrabMode, PrimaryWindow}, DefaultPlugins};
 use bevy::prelude::*;
 use bevy::prelude::Mesh as BMesh;
 use bevy_egui::{EguiContext, EguiContexts, EguiPlugin};
@@ -32,32 +34,17 @@ impl DerefMut for OrbifoldMesh {
 
 impl OrbifoldMesh {
     pub fn build_mesh(&self) -> bevy::prelude::Mesh {
-        let (colors, nodes): (Vec<Vec4>, Vec<[f32; 3]>) = self.triangles
-            .iter()
-            .cloned()
-            .filter_map(|tri| {
-                match tri {
-                    None => None,
-                    Some(tri) => {
-                        let color = Color::srgba_u8(rand::random(), rand::random(), rand::random(), 128).to_srgba().to_vec4();
-                        let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
-                        // let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
-
-                        Some((color, nodes))
-                    }
-                }
-            })
-            .map(|(color, nodes)| {
-                nodes.into_iter().map(move |node| (color, node))
-            })
-            .flatten()
-            .unzip();
+        self.0.clone().subdivide().calculate_projective_structure(1e-9, 100);
+        let MeshTriangleInfo { triangles, nodes } = self.0.clone().subdivide().build_mesh();
+        println!("{:?}", self.0.contraction_order);
+        let MeshTriangleInfo { triangles, nodes } = self.0.clone().build_mesh();
+        let (indices, colors): (Vec<u32>, Vec<Vec4>) = triangles.into_iter().map(|(i, [r,g,b,a])| (i as u32, Color::srgba_u8(r,g,b,a).to_srgba().to_vec4())).unzip();
 
         bevy::prelude::Mesh::new(
                 bevy::render::mesh::PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default()
             )
-            .with_inserted_indices(Indices::U32((0..nodes.len()).map(|i| i as u32).collect::<Vec<_>>()))
+            .with_inserted_indices(Indices::U32(indices))
             .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes)
             .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
             // .apply(|(colors, other): (Vec<Vec4>, Vec<([f32; 3], Vector3<f32>)>)| (colors, other.unzip()));
@@ -129,10 +116,58 @@ impl FileDialog {
 
                             let (mut mesh, mut orbifold) = query.into_inner();
                             orbifold.0 = ClosedTriangleMesh::build(builder).unwrap();
-                            mesh.0 = meshes.add(orbifold.build_mesh())
+                            mesh.0 = meshes.add(orbifold.build_mesh());
+                            file_dialog.dialog = None;
                         } else {
                             file_dialog.dialog = None;
                         }
+                    } else if files.len() == 1 && files[0].extension() == Some(OsStr::new("norm")) { 
+                        let mut reader = csv::ReaderBuilder::new()
+                            .has_headers(false)
+                            .delimiter(b' ')
+                            .from_path(files[0])
+                            .unwrap();
+                        let mut records = reader.records();
+                        let mut nodes = Vec::<UnfinishedNode>::new();
+                        let triangles = records.array_chunks::<6>()
+                            .map(|[a, _, b, _, c, _]| [a.unwrap(), b.unwrap(), c.unwrap()])
+                            .map(|vertices| {
+                                vertices
+                                    .map(|node| {
+                                        println!("record: {node:?}");
+                                        let n: [f64;3] = node.into_iter()
+                                            .map(|c| c.parse::<f64>().unwrap())
+                                            .collect::<Vec<_>>()
+                                            .try_into()
+                                            .unwrap();
+                                        n
+                                    })
+                            })
+                            .collect::<Vec<_>>();
+                        let triangles= triangles.into_iter()
+                            .map(|vertices| {
+                                vertices.map(|coordinates| {
+                                    let index = nodes.iter()
+                                        .enumerate()
+                                        .find(|(_, node)| node.coordinates == coordinates)
+                                        .map(|(index, _)| index)
+                                        .unwrap_or_else(|| {
+                                            nodes.push(UnfinishedNode::new_f64(coordinates));
+                                            nodes.len() - 1
+                                        });
+                                    Into::<Index<UnfinishedNode>>::into(index)
+                                })
+                            })
+                            .collect::<Vec<_>>();
+                        let mut builder = MeshBuilder::default();
+                        nodes.into_iter().for_each(|node| { builder.add_node(node); });
+                        triangles.into_iter().for_each(|[a,b,c]| { builder.add_triangle_by_nodes(a, b, c).unwrap(); });
+                        let (mut mesh, mut orbifold) = query.into_inner();
+                        println!("{:?}", builder.nodes.len());
+                        println!("{:?}", builder.edges.iter().filter(|edge| edge.as_ref().unwrap().previous.is_none()).count());
+                        orbifold.0 = ClosedTriangleMesh::build(builder).unwrap();
+                        mesh.0 = meshes.add(orbifold.build_mesh());
+                        file_dialog.dialog = None;
                     } else {
                         file_dialog.dialog = None;
                     }
@@ -140,7 +175,7 @@ impl FileDialog {
             } else if input_handler.just_pressed(KeyCode::KeyO) {
                 println!("open file");
                 let file_filter = Box::new({
-                    let extensions = [Some(OsStr::new("tri")), Some(OsStr::new("ver"))];
+                    let extensions = [Some(OsStr::new("tri")), Some(OsStr::new("ver")), Some(OsStr::new("norm"))];
                     move |path: &Path| -> bool { extensions.contains(&path.extension())}
                 });
                 let mut dialog = egui_file::FileDialog::open_file(None).show_files_filter(file_filter).multi_select(true);
@@ -151,6 +186,7 @@ impl FileDialog {
     }
 }
 fn main() {
+    let file_dialog = egui_file::FileDialog::open_file(None);
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin)
@@ -237,12 +273,12 @@ fn mouse_rotation(
     for event in mouse_motion_events.read() {
         // Adjust the rotation based on mouse movement
         let sensitivity = 0.1; // Adjust sensitivity as needed
-        rotation.yaw -= event.delta.y * sensitivity;
-        rotation.pitch -= event.delta.x * sensitivity;
+        rotation.pitch += event.delta.x * sensitivity;
+        rotation.yaw += event.delta.y * sensitivity;
 
         // Apply rotation
         // Quat::from_rotation_y(yaw) + Quat::from_rotation_x(angle)
-        transform.rotation = Quat::from_euler(EulerRot::XYZ, rotation.yaw.to_radians(), rotation.pitch.to_radians(), 0.0);
+        transform.rotation = Quat::from_euler(EulerRot::YXZ, rotation.pitch.to_radians(), rotation.yaw.to_radians(), 0.0);
     }
 }
 
@@ -256,6 +292,7 @@ fn collapse_edge(
         if input.key_code == KeyCode::KeyC && input.state  == ButtonState::Released {
             println!("contracting!");
             orbifold.contract_next_edge();
+            println!("contraction list: {:?}", orbifold.contraction_order.clone().into_sorted_iter().collect::<Vec<_>>());
             mesh.0 = meshes.add(orbifold.build_mesh())
         }
         if input.key_code == KeyCode::KeyU && input.state  == ButtonState::Released {
@@ -314,14 +351,13 @@ fn setup(
         mesh
     ));
 
-        let camera_and_light_transform =
-        Transform::from_xyz(3.8, 3.8, 3.8).looking_at(Vec3::ZERO, Vec3::Y);
-
-    commands.spawn((Camera3d::default(), camera_and_light_transform, CameraRotation { yaw: 0.0, pitch: 0.0 }));
+    let camera_and_light_transform = Transform::from_xyz(3.8, 3.8, 3.8).looking_at(Vec3::ZERO, Vec3::Y);
+    // let (yaw, pitch, _) = camera_and_light_transform.rotation.to_euler(EulerRot::XYZ);
+    commands.spawn((Camera3d::default(), camera_and_light_transform, CameraRotation { yaw: 0.0, pitch: 0. }));
     commands.spawn((PointLight::default(), camera_and_light_transform));
 
-    window.cursor_options.grab_mode = CursorGrabMode::Locked; 
-    window.cursor_options.visible = false;
+    // window.cursor_options.grab_mode = CursorGrabMode::Locked; 
+    // window.cursor_options.visible = false;
 
     /// Creates a colorful test pattern
 fn uv_debug_texture() -> Image {
