@@ -74,15 +74,26 @@ impl<TM: TriangleMesh> TriangleRoundness for (&TM, Index<Triangle>) {
 }
 
 pub trait ContractionOrder {
-    fn calculate_contraction_order(&self) -> usize;
+    fn calculate_contraction_order(&self) -> Option<usize>;
 }
 
 impl<TD: MeshData> ContractionOrder for (&ClosedTriangleMesh<TD>, Index<Edge>) {
-    fn calculate_contraction_order(&self) -> usize {
+    fn calculate_contraction_order(&self) -> Option<usize> {
         let (mesh, edge) = self;
         let (s,t) = mesh[*edge].as_ref().unwrap().apply(|edge| (edge.source, edge.target));
         let contracted_mesh = mesh.simulate_contract_edge(*edge);
-        mesh[s].as_ref().unwrap().outgoing.iter()
+
+        // Check the resulting dihedral angle between any two facettes where s was a part of
+        // If the resulting dihedral angle is too large, the contraction is deemed to be invalid to reduce artifacts resulting due geometrics defecies, e.g. facettes collapsing on each other.
+        let uncontractable = mesh[s].as_ref().unwrap().outgoing.iter()
+            .filter_map(|edge| contracted_mesh[*edge].as_ref())
+            .map(|edge| { println!("dihedral_angle: {}", (&contracted_mesh, edge).dihedral_angle().to_degrees()); edge })
+            .map(|edge| (&contracted_mesh, edge).dihedral_angle().to_degrees() < 45f64)
+            .any(|contractable| contractable);
+        if uncontractable {
+            return None;
+        }
+        let order = mesh[s].as_ref().unwrap().outgoing.iter()
             .filter_map(|edge| {
                 contracted_mesh[*edge]
                     .as_ref()
@@ -95,6 +106,44 @@ impl<TD: MeshData> ContractionOrder for (&ClosedTriangleMesh<TD>, Index<Edge>) {
                     None
                 }
             })
-            .sum::<f32>() as usize
+            .sum::<f32>() as usize;
+        Some(order)
+    }
+}
+
+pub trait DihedralAngle {
+    fn dihedral_angle(&self) -> f64;
+}
+
+impl DihedralAngle for (Vector3<f64>, Vector3<f64>) {
+    fn dihedral_angle(&self) -> f64 {
+        if self.0 == self.1 {
+            return 0f64
+        }
+        let angle = self.0.angle(&self.1);
+        return if angle == 0f64 { 180f64 } else { angle }
+    }
+}
+
+impl DihedralAngle for ([Vector3<f64>; 3], [Vector3<f64>; 3]) {
+    fn dihedral_angle(&self) -> f64 {
+        ((self.0[1] - self.0[0]).cross(&(self.0[2] - self.0[0])), (self.1[1] - self.1[0]).cross(&(self.1[2] - self.1[0]))).dihedral_angle()
+    }
+}
+
+impl<TD: MeshData> DihedralAngle for (&ClosedTriangleMesh<TD>, Index<Edge>) {
+    fn dihedral_angle(&self) -> f64 {
+        let edge = self.0[self.1].as_ref().unwrap();
+        (self.0, edge).dihedral_angle()
+    }
+}
+
+impl<TM: TriangleMesh> DihedralAngle for (&TM, &Edge) {
+    fn dihedral_angle(&self) -> f64 {
+        let edge = self.1;
+        let opposite = self.0[edge.opposite].as_ref().unwrap();
+        let (left, right) = (self.0[edge.triangle].as_ref().unwrap().corners, self.0[opposite.triangle].as_ref().unwrap().corners);
+        let triangles: ([Vector3<f64>; 3], [Vector3<f64>; 3]) = (left.map(|n| Vector3::from(self.0[n].as_ref().unwrap().coordinates)), right.map(|n| Vector3::from(self.0[n].as_ref().unwrap().coordinates)));
+        triangles.dihedral_angle()
     }
 }

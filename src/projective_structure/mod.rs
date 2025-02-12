@@ -254,9 +254,14 @@ impl ClosedTriangleMesh<SubdividedTriangleData> {
         coefficients
     }
 
-    pub fn calculate_projective_structure(self, target_error: f64, max_iterations: u32) -> ClosedTriangleMesh</* TODO: correct type */()> { 
+    pub fn calculate_projective_structure(self, target_error: f64) -> ClosedTriangleMesh</* TODO: correct type */()> { 
         let mut equations = CEquations::new(&self);
+        println!("calculating ps: Edges: {}", equations.mapping.len());
+        let now = Instant::now();
         let (equations, report) = LevenbergMarquardt::new().minimize(equations);
+        println!("iterations: {}, solution: {:?}", report.number_of_evaluations, equations.calculate().norm());
+        println!("Levenberg_Marquardt: {}", now.elapsed().as_millis());
+        println!("calculating ps: Finished");
         ClosedTriangleMesh::</* TODO: correct type */()> { triangle_data: List::with_defaults(self.triangles.len()), ..self }
     }
 }

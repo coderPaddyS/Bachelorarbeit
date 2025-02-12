@@ -1,10 +1,12 @@
 use std::{collections::{BinaryHeap, HashMap, HashSet}, marker::PhantomData};
 
 use apply::{Also, Apply};
+use itertools::Itertools;
 use log::{debug, info, error};
 use priority_queue::{DoublePriorityQueue, PriorityQueue};
 
 use super::{reduction::ContractionOrder, Edge, FromMeshBuilder, Index, List, MeshBuilder, MeshError, Node, Triangle};
+use super::reduction::DihedralAngle;
 
 pub struct MeshTriangleInfo {
     pub nodes: Vec<[f32; 3]>,
@@ -33,6 +35,7 @@ impl MeshData for () {
     type CollapseInfoInput = TriangleMeshHalfEdgeCollapse;
     type CollapseInfoOutput = TriangleMeshHalfEdgeCollapse;
     fn contract_edge(_: &mut ClosedTriangleMesh<Self>, collapse_info: Self::CollapseInfoInput) -> Self::CollapseInfoOutput {
+        println!("info");
         collapse_info
     }
 }
@@ -319,21 +322,25 @@ impl<TD: MeshData> ClosedTriangleMesh<TD> {
         self.contraction_order.clear();
 
         for (index, edge) in self.edges.iter().enumerate().filter(|edge| edge.1.is_some()) {
+            println!("angle: {}", (&*self, edge.as_ref().unwrap()).dihedral_angle().to_degrees());
             // TODO: Generate a good contraction order
             let index: Index<Edge> = index.into();
-            let order = (self as &ClosedTriangleMesh<TD>, index.into()).calculate_contraction_order();
-            self.contraction_order.push(index.into(), order);
+            if let Some(order) = (self as &ClosedTriangleMesh<TD>, index.into()).calculate_contraction_order() {
+                self.contraction_order.push(index.into(), order);
+            }
         }
     }
 
-    fn update_contraction_order<'a, I: Iterator<Item = &'a Index<Edge>>>(&mut self, affected: I) {
+    fn update_contraction_order<I: Iterator<Item = Index<Edge>>>(&mut self, affected: I) {
         // TODO: correctly recompute contraction order
         for edge in affected {
-            if self[*edge].is_none() {
-                self.contraction_order.remove(edge);
+            if self[edge].is_none() {
+                self.contraction_order.remove(&edge);
             } else {
-                let order = (self as &ClosedTriangleMesh<TD>, *edge).calculate_contraction_order();
-                self.contraction_order.push(*edge, order);
+                println!("angle: {}", (&*self, edge).dihedral_angle().to_degrees());
+                if let Some(order) = (self as &ClosedTriangleMesh<TD>, edge).calculate_contraction_order() {
+                    self.contraction_order.push(edge, order);
+                }
             }
         }
     }
@@ -533,13 +540,25 @@ impl<TD: MeshData> ClosedTriangleMesh<TD> {
             });
             self[facette].as_mut().unwrap().corners = [a, b, c];
         }
+        for removed_edge in &removed_edge_indices {
+            self.previous_edge_mut(*removed_edge).unwrap().next = *removed_edge;
+            self.next_edge_mut(*removed_edge).unwrap().previous = *removed_edge;
+        }
         let (ta, a) = (st.next, self[st.next].as_ref().unwrap().target);
         let (dt, d) = self[st.opposite].as_ref().unwrap().apply(|it| (it.previous, self[it.previous].as_ref().unwrap().source));
-        self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(ts.source, self[ta].as_ref().unwrap().opposite);
+        // self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(ts.source, self[self[ta].as_ref().unwrap().opposite].as_ref().unwrap().next);
+        self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(ts.source, ta);
         self[a].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(a, self[ta].as_ref().unwrap().opposite);
         self[d].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(d, dt);
 
-        self.update_contraction_order(removed_edge_indices.iter());
+        let affected_edges = source.outgoing
+            .into_iter()
+            .filter_map(|idx| self[idx].as_ref().map(|edge| [idx, edge.opposite]))
+            .flatten()
+            .collect_vec()
+            .into_iter()
+            .chain(removed_edge_indices.into_iter());
+        self.update_contraction_order(affected_edges);
     }
 }
 
@@ -580,7 +599,7 @@ where
 
         let mut facettes = vec![];
         let outgoing = source.outgoing.clone().into_iter().filter(|index| self[*index].is_some()).collect::<Vec<_>>();
-        for outgoing in outgoing {
+        for outgoing in outgoing.clone() {
             let index = self[outgoing].as_ref().unwrap().triangle;
 
             // Remember all indices of facettes which had s as corner but not t.
@@ -590,7 +609,7 @@ where
             } 
 
             let facette = self[index].as_mut().unwrap();
-            println!("HEC: Triangle: {facette:?}");
+            debug!("HEC: Triangle: {facette:?}");
             for corner in &mut facette.corners {
                 if *corner == st.source {
                     debug!("HEC: Replacing corner {corner} with target {}", st.target);
@@ -638,8 +657,8 @@ where
                 it.remove(0);
             });
 
-            println!("Looking at edge: {index}. Searching dt: {dt}, so td: {td}");
-            println!("Outgoing at t: {t_outgoing:?}");
+            debug!("Looking at edge: {index}. Searching dt: {dt}, so td: {td}");
+            debug!("Outgoing at t: {t_outgoing:?}");
 
             // for outgoing in t_outgoing {
             //     if let Some(next) = self[outgoing].as_ref().map(|it| it.next) {
@@ -673,7 +692,16 @@ where
             removed_edges: vec![(_as.opposite, sa), (st.previous, _as), (sd.opposite, ds), (ts.next, sd), (st.opposite, ts), (index, st)],
         };
         let info = TD::contract_edge(self, info);
-        self.update_contraction_order(info.removed_edges().iter().map(|(index,_) | index));
+
+        let removed_edges = &info.removed_edges();
+        let affected_edges = outgoing
+            .into_iter()
+            .filter_map(|idx| self[idx].as_ref().map(|edge| [idx, edge.opposite]))
+            .flatten()
+            .collect_vec()
+            .into_iter()
+            .chain(removed_edges.iter().map(|(i,_)| *i));
+        self.update_contraction_order(affected_edges);
         self.undo_contraction.push(info);
         &self.undo_contraction.last().unwrap()
     }
