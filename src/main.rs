@@ -34,10 +34,9 @@ impl DerefMut for OrbifoldMesh {
 
 impl OrbifoldMesh {
     pub fn build_mesh(&self) -> bevy::prelude::Mesh {
-        self.0.clone().subdivide().calculate_projective_structure(1e-9, 100);
         let MeshTriangleInfo { triangles, nodes } = self.0.clone().subdivide().build_mesh();
-        println!("{:?}", self.0.contraction_order);
-        let MeshTriangleInfo { triangles, nodes } = self.0.clone().build_mesh();
+        // println!("{:?}", self.0.contraction_order);
+        // let MeshTriangleInfo { triangles, nodes } = self.0.clone().build_mesh();
         let (indices, colors): (Vec<u32>, Vec<Vec4>) = triangles.into_iter().map(|(i, [r,g,b,a])| (i as u32, Color::srgba_u8(r,g,b,a).to_srgba().to_vec4())).unzip();
 
         bevy::prelude::Mesh::new(
@@ -68,7 +67,6 @@ impl FileDialog {
         let mut file_dialog = Self { dialog: None };
         return move |input_handler, mut contexts, mut meshes, mut query| {
             if let Some(dialog) = &mut file_dialog.dialog {
-                println!("dialog open");
                 dialog.show(contexts.ctx_mut());
                 if dialog.selected() {
                     let files = dialog.selection();
@@ -292,13 +290,17 @@ fn collapse_edge(
         if input.key_code == KeyCode::KeyC && input.state  == ButtonState::Released {
             println!("contracting!");
             orbifold.contract_next_edge();
-            println!("contraction list: {:?}", orbifold.contraction_order.clone().into_sorted_iter().collect::<Vec<_>>());
+            // println!("contraction list: {:?}", orbifold.contraction_order.clone().into_sorted_iter().collect::<Vec<_>>());
             mesh.0 = meshes.add(orbifold.build_mesh())
         }
         if input.key_code == KeyCode::KeyU && input.state  == ButtonState::Released {
             println!("uncontracting!");
             orbifold.uncontract_next_edge();
             mesh.0 = meshes.add(orbifold.build_mesh())
+        }
+        if input.key_code == KeyCode::KeyP && input.state  == ButtonState::Released {
+            println!("projective structure!");
+            orbifold.0.clone().subdivide().calculate_projective_structure(1e-9, 100);
         }
     }
 }

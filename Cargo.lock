@@ -333,6 +333,7 @@ name = "ba"
 version = "0.1.0"
 dependencies = [
  "apply",
+ "approx",
  "bevy",
  "bevy_egui",
  "csv",

@@ -83,6 +83,10 @@ pub trait TriangleMesh:
     fn triangles(&self) -> &List<Triangle>;
     fn current_triangles(&self) -> Vec<(Index<Triangle>, Triangle)>;
     fn triangle_data(&self) -> &List<Self::Data, Triangle>;
+
+    fn find_edge(&self, source: Index<Node>, target: Index<Node>) -> Option<Index<Edge>> {
+        self[source].as_ref().unwrap().outgoing.iter().find(|edge| self[**edge].as_ref().unwrap().target == target).copied()
+    }
 }
 
 pub struct SimulatedEdgeCollapse<'m, TD: MeshData, TM: TriangleMesh> {

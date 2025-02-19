@@ -135,6 +135,14 @@ impl<T, I> List<T, I> {
         Index::new(self.0.len()-1)
     }
 
+    pub fn enumerate(&self) -> impl core::iter::Iterator<Item = (Index<I>, &Option<T>)> {
+        self.0.iter().enumerate().map(|(i, t)| (i.into(), t))
+    }
+
+    pub fn enumerate_some(&self) -> impl core::iter::Iterator<Item = (Index<I>, &T)> {
+        self.0.iter().enumerate().filter_map(|(i, t)| t.as_ref().map(|t| (i.into(), t)))
+    }
+
     pub fn compact(&mut self) -> ListIndexTransformations<T> {
         let mut transformations: Vec<Index<T>> = (0..self.0.len()).map(|i| i.into()).collect();
         let (mut i, mut j) = (0, self.0.len() - 1);

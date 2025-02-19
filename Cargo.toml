@@ -19,6 +19,7 @@ pretty_env_logger = "0.5.0"
 priority-queue = "2.1.1"
 rand = "0.8.5"
 thiserror = "2.0.3"
+approx = "0.5.1"
 
 [target.x86_64-unknown-linux-gnu]
 linker = "clang"
