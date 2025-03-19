@@ -1,8 +1,10 @@
 #![feature(iter_array_chunks)]
+#![feature(trivial_bounds)]
 
-use std::{f32::consts::PI, ffi::OsStr, ops::{Deref, DerefMut}, path::Path};
+use std::{any::Any, f32::consts::PI, ffi::OsStr, ops::{Deref, DerefMut}, path::{Path, PathBuf}};
 
-use ba::{mesh::{FromMeshBuilder, Index, MeshBuilder, MeshTriangleInfo, Node, UnfinishedNode}, projective_structure::SubdiviveMesh, ClosedTriangleMesh};
+use apply::Apply;
+use ba::{mesh::{ContractableMesh, Edge, FromMeshBuilder, Index, List, MeshBuilder, MeshData, MeshTriangleInfo, Node, TriangleMesh, UncontractableMesh, UnfinishedNode}, projective_structure::{self, structure::{self, ProjectiveStructure}, visualisation::{ProjectiveStructureVisualisation, VisualiseProjectiveStructure}, CEquationParameters, CEquations, CalculateProjectiveStructure, CalculationProjectiveStructureStepsize, SubdividedTriangleData, SubdiviveMesh}, ClosedTriangleMesh};
 use bevy::{app::{App, Startup}, ecs::query::QueryData, input::{keyboard::KeyboardInput, mouse::MouseMotion, ButtonState}, prelude::Commands, render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::{Extent3d, PipelineDescriptor, RenderPipelineDescriptor, TextureDimension, TextureFormat}, view::WindowSurfaces}, utils::hashbrown::HashMap, window::{CursorGrabMode, PrimaryWindow}, DefaultPlugins};
 use bevy::prelude::*;
 use bevy::prelude::Mesh as BMesh;
@@ -10,9 +12,49 @@ use bevy_egui::{EguiContext, EguiContexts, EguiPlugin};
 use csv::StringRecord;
 use nalgebra::coordinates;
 
+enum InnerType {
+    Mesh(ClosedTriangleMesh),
+    ProjectiveStructure(ProjectiveStructure<ClosedTriangleMesh>),
+    ControlNetProjectiveStructure {
+        structure: ProjectiveStructure<ClosedTriangleMesh<SubdividedTriangleData>>,
+        mapping: Vec<(Index<Edge>, Index<Edge>)>,
+        history: Vec<CEquationParameters>,
+        current: usize
+    },
+    UncontractableProjectiveStructure(ProjectiveStructure<ClosedTriangleMesh<SubdividedTriangleData>>)
+}
+
+impl InnerType {
+    fn build_mesh(&self) -> MeshTriangleInfo {
+        match self {
+            InnerType::Mesh(mesh) => mesh.build_mesh(),
+            InnerType::ProjectiveStructure(structure) => structure.build_mesh(),
+            InnerType::ControlNetProjectiveStructure { structure, .. } => structure.build_mesh(),
+            InnerType::UncontractableProjectiveStructure(structure) => structure.build_mesh()
+        }
+    }
+
+    fn uncontract_edge(&mut self, info: <<ClosedTriangleMesh as TriangleMesh>::Data as MeshData>::CollapseInfoOutput) {
+        match self {
+            InnerType::Mesh(mesh) => mesh.uncontract_edge(info),
+            InnerType::ProjectiveStructure(structure) => structure.uncontract_edge(info),
+            InnerType::ControlNetProjectiveStructure { structure, .. } => (),
+            InnerType::UncontractableProjectiveStructure(structure) => structure.uncontract_edge(info)
+        }
+    }
+
+    fn uncontract_next_edge(&mut self) {
+        match self {
+            InnerType::Mesh(mesh) => mesh.uncontract_next_edge(|_, _| {}),
+            InnerType::ProjectiveStructure(structure) => structure.uncontract_next_edge(|_, _| {}),
+            InnerType::ControlNetProjectiveStructure { structure, .. } => (),
+            InnerType::UncontractableProjectiveStructure(structure) => structure.uncontract_next_edge(|_, _| {})
+        }
+    }
+}
 
 #[derive(Component)]
-struct OrbifoldMesh(ClosedTriangleMesh);
+struct OrbifoldMesh(InnerType);
 
 #[derive(Component)]
 struct CameraRotation {
@@ -21,7 +63,7 @@ struct CameraRotation {
 }
 
 impl Deref for OrbifoldMesh {
-    type Target = ClosedTriangleMesh;
+    type Target = InnerType;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -34,7 +76,8 @@ impl DerefMut for OrbifoldMesh {
 
 impl OrbifoldMesh {
     pub fn build_mesh(&self) -> bevy::prelude::Mesh {
-        let MeshTriangleInfo { triangles, nodes } = self.0.clone().subdivide().build_mesh();
+        // let MeshTriangleInfo { triangles, nodes } = self.0.clone().subdivide().build_mesh();
+        let MeshTriangleInfo { triangles, nodes } = self.0.build_mesh();
         // println!("{:?}", self.0.contraction_order);
         // let MeshTriangleInfo { triangles, nodes } = self.0.clone().build_mesh();
         let (indices, colors): (Vec<u32>, Vec<Vec4>) = triangles.into_iter().map(|(i, [r,g,b,a])| (i as u32, Color::srgba_u8(r,g,b,a).to_srgba().to_vec4())).unzip();
@@ -113,7 +156,7 @@ impl FileDialog {
                                 .collect();
 
                             let (mut mesh, mut orbifold) = query.into_inner();
-                            orbifold.0 = ClosedTriangleMesh::build(builder).unwrap();
+                            orbifold.0 = InnerType::Mesh(ClosedTriangleMesh::build(builder).unwrap());
                             mesh.0 = meshes.add(orbifold.build_mesh());
                             file_dialog.dialog = None;
                         } else {
@@ -163,7 +206,7 @@ impl FileDialog {
                         let (mut mesh, mut orbifold) = query.into_inner();
                         println!("{:?}", builder.nodes.len());
                         println!("{:?}", builder.edges.iter().filter(|edge| edge.as_ref().unwrap().previous.is_none()).count());
-                        orbifold.0 = ClosedTriangleMesh::build(builder).unwrap();
+                        orbifold.0 = InnerType::Mesh(ClosedTriangleMesh::build(builder).unwrap());
                         mesh.0 = meshes.add(orbifold.build_mesh());
                         file_dialog.dialog = None;
                     } else {
@@ -280,6 +323,18 @@ fn mouse_rotation(
     }
 }
 
+fn to_bevy_mesh(MeshTriangleInfo { triangles, nodes }: MeshTriangleInfo) -> bevy::prelude::Mesh {
+    let (indices, colors): (Vec<u32>, Vec<Vec4>) = triangles.into_iter().map(|(i, [r,g,b,a])| (i as u32, Color::srgba_u8(r,g,b,a).to_srgba().to_vec4())).unzip();
+
+    bevy::prelude::Mesh::new(
+            bevy::render::mesh::PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default()
+        )
+        .with_inserted_indices(Indices::U32(indices))
+        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_POSITION, nodes)
+        .with_inserted_attribute(bevy::prelude::Mesh::ATTRIBUTE_COLOR, colors)
+}
+
 fn collapse_edge(
     mut keyboard_input: EventReader<KeyboardInput>,
     mut meshes: ResMut<Assets<bevy::prelude::Mesh>>,
@@ -288,10 +343,12 @@ fn collapse_edge(
     let (mut mesh, mut orbifold) = mesh.into_inner();
     for input in keyboard_input.read() {
         if input.key_code == KeyCode::KeyC && input.state  == ButtonState::Released {
-            println!("contracting!");
-            orbifold.contract_next_edge();
+            if let InnerType::Mesh(orbmesh) = &mut orbifold.0 {
+                println!("contracting!");
+                orbmesh.contract_next_edge();                
+                mesh.0 = meshes.add(orbifold.build_mesh())
+            }
             // println!("contraction list: {:?}", orbifold.contraction_order.clone().into_sorted_iter().collect::<Vec<_>>());
-            mesh.0 = meshes.add(orbifold.build_mesh())
         }
         if input.key_code == KeyCode::KeyU && input.state  == ButtonState::Released {
             println!("uncontracting!");
@@ -299,8 +356,67 @@ fn collapse_edge(
             mesh.0 = meshes.add(orbifold.build_mesh())
         }
         if input.key_code == KeyCode::KeyP && input.state  == ButtonState::Released {
-            println!("projective structure!");
-            orbifold.0.clone().subdivide().calculate_projective_structure(1e-9, 100);
+            if let InnerType::Mesh(orbmesh) = &orbifold.0 {
+                println!("projective structure!");
+                // let m = orbmesh.clone().apply(|it| (it.clone(), it.calculate_projective_structure())).apply(|(mut mesh, structure)| {
+                    // let mut coefficients = List::with_defaults(mesh.edges.len());
+                    // structure.into_iter().for_each(|((index, _), coefficient)| coefficients[index] = Some(coefficient));
+                    // ProjectiveStructure::from_bare(coefficients, mesh)
+                // });
+                let (mapping, structure, history) = orbmesh.clone()
+                    .subdivide()
+                    .calculate_projective_structure(1e-9, 15, 8, CalculationProjectiveStructureStepsize::Break(0.125f64))
+                    .apply(|(s, h)| (s.mapping.clone(), ProjectiveStructure::new(s), h));
+                
+                ProjectiveStructureVisualisation::new(&structure).visualise().apply(|info| mesh.0 = meshes.add(to_bevy_mesh(info)));
+                
+                orbifold.0 = InnerType::ControlNetProjectiveStructure { mapping, structure, current: history.len() - 1, history };
+            }
+        }
+        if input.key_code == KeyCode::Digit0 && input.state  == ButtonState::Released {
+            if let InnerType::ControlNetProjectiveStructure { mapping, structure, history, current } = &mut orbifold.0 {
+                *current = 0;
+                structure.replace(history[0].clone(), mapping);
+                ProjectiveStructureVisualisation::new(&structure).visualise().apply(|info| mesh.0 = meshes.add(to_bevy_mesh(info)));
+            }
+        }
+        if input.key_code == KeyCode::Period && input.state  == ButtonState::Released {
+            if let InnerType::ControlNetProjectiveStructure { mapping, structure, history, current } = &mut orbifold.0 {
+                if *current < history.len() - 1 {
+                    *current = *current + 1;
+                    structure.replace(history[*current].clone(), mapping);
+                    ProjectiveStructureVisualisation::new(&structure).visualise().apply(|info| mesh.0 = meshes.add(to_bevy_mesh(info)));
+                }
+            }
+        }
+        if input.key_code == KeyCode::Comma && input.state  == ButtonState::Released {
+            if let InnerType::ControlNetProjectiveStructure { mapping, structure, history, current } = &mut orbifold.0 {
+                if *current > 0 {
+                    *current = *current - 1;
+                    structure.replace(history[*current].clone(), mapping);
+                    ProjectiveStructureVisualisation::new(&structure).visualise().apply(|info| mesh.0 = meshes.add(to_bevy_mesh(info)));
+                }
+            }
+        }
+        if input.key_code == KeyCode::KeyI && input.state  == ButtonState::Released {
+            if let InnerType::Mesh(orbmesh) = &orbifold.0 {
+                println!("saving mesh!");
+                orbmesh.clone().save_to_dir(&mut PathBuf::from("./output/"), "orbifold");
+            } else if let InnerType::ProjectiveStructure(structure) = &orbifold.0 {
+                println!("saving projective structure!");
+                structure.clone().save_to_dir(&mut PathBuf::from("./output/"), "orbifold");
+            }
+        }
+        if input.key_code == KeyCode::KeyE && input.state  == ButtonState::Released {
+            println!("loading mesh!");
+            orbifold.0 = InnerType::Mesh(ClosedTriangleMesh::restore_from_dir(&mut PathBuf::from("./output/"), "orbifold"));
+            mesh.0 = meshes.add(orbifold.build_mesh())
+        }
+        if input.key_code == KeyCode::KeyN && input.state  == ButtonState::Released {
+            println!("loading projective structure via mesh and coefficients!");
+            // orbifold.0 = InnerType::ProjectiveStructure(ProjectiveStructure::restore_from_dir(&mut PathBuf::from("./output/"), "orbifold"));
+            orbifold.0 = InnerType::ProjectiveStructure(ProjectiveStructure::restore_from_dir_by_cp(&mut PathBuf::from("./output/"), "orbifold", 4));
+            mesh.0 = meshes.add(orbifold.build_mesh())
         }
     }
 }
@@ -315,11 +431,11 @@ fn setup(
     
     let mut builder = ba::mesh::MeshBuilder::default();
     let nodes: Vec<_> = vec![
-        [1.0f32,1.0f32,1.0f32],
-        [1.0f32,1.0f32,-1.0f32],
+        [2.0f32,1.0f32,1.0f32],
+        [2.0f32,1.0f32,-1.0f32],
         [1.0f32,-1.0f32,1.0f32],
         [1.0f32,-1.0f32,-1.0f32],
-        [-1.0f32,1.0f32,1.0f32],
+        [-0.5f32,1.0f32,1.0f32],
         [-1.0f32,1.0f32,-1.0f32],
         [-1.0f32,-1.0f32,1.0f32],
         [-1.0f32,-1.0f32,-1.0f32],
@@ -327,19 +443,19 @@ fn setup(
         builder.add_node(UnfinishedNode::new(node))
     }).collect();
     vec![
-        [2, 0, 1], [3,2, 1],
-        [5, 1, 0], [4,5, 0],
-        [4, 0, 2], [4,2, 6],
-        [5, 4, 6], [7,5, 6],
-        [6, 2, 3], [6,3, 7],
-        [7, 3, 1], [7,1, 5]
+        [0, 1, 2], [2, 1, 3],
+        [1, 0, 5], [5, 0, 4],
+        [0, 2, 4], [2, 6, 4],
+        [4, 6, 5], [5, 6, 7],
+        [2, 3, 6], [3, 7, 6],
+        [3, 1, 7], [1, 5, 7]
     ].into_iter()
         .for_each(|[a,b,c]| { 
             builder.add_triangle_by_nodes(nodes[a], nodes[b], nodes[c]).unwrap();
         });
     
     debug!("building mesh");
-    let mesh = OrbifoldMesh(ClosedTriangleMesh::build(builder).unwrap());
+    let mesh = OrbifoldMesh(InnerType::Mesh(ClosedTriangleMesh::build(builder).unwrap()));
 
     let debug_material = materials.add(StandardMaterial {
         base_color_texture: Some(images.add(uv_debug_texture())),

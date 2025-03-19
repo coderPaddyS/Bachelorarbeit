@@ -12,6 +12,7 @@ pub use list::*;
 // Vec of EdgeIndex -> No sorting, shuffling, preallocation of array, but bad cache effiency.
 // Array start + length -> Good cache effiency, but preallocation and relocation needed.
 #[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Node {
     // pub label: String,
     pub coordinates: [f64; 3],
@@ -32,6 +33,7 @@ impl Node {
 }
 
 #[derive(Clone, Debug, Hash)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Edge {
     pub source: Index<Node>,
     pub target: Index<Node>,
@@ -49,6 +51,7 @@ impl PartialEq for Edge {
 
 impl Eq for Edge {}
 #[derive(Clone, Debug)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Triangle {
     pub corners: [Index<Node>; 3],
 }

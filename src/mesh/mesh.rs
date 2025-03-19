@@ -1,6 +1,7 @@
-use std::{collections::{BinaryHeap, HashMap, HashSet}, marker::PhantomData};
+use std::{collections::{BinaryHeap, HashMap, HashSet}, io::BufRead, marker::PhantomData};
 
 use apply::{Also, Apply};
+use bevy::ecs::system::IntoSystem;
 use itertools::Itertools;
 use log::{debug, info, error};
 use priority_queue::{DoublePriorityQueue, PriorityQueue};
@@ -13,7 +14,7 @@ pub struct MeshTriangleInfo {
     pub triangles: Vec<(usize, [u8; 4])>,
 }
 
-pub trait MeshCollapseInfo: Sized {
+pub trait MeshCollapseInfo: Sized + Clone {
     fn source(&self) -> (Index<Node>, Node);
     fn target(&self) -> Index<Node>;
     fn facettes(&self) -> Vec<Index<Triangle>>;
@@ -21,10 +22,10 @@ pub trait MeshCollapseInfo: Sized {
     fn removed_facettes(&self) -> [(Index<Triangle>, Option<Triangle>); 2];
 }
 
-pub trait MeshData: Sized {
+pub trait MeshData: Sized + Clone {
     type CollapseInfoInput: MeshCollapseInfo;
     type CollapseInfoOutput: MeshCollapseInfo;
-    fn build_mesh(mesh: &ClosedTriangleMesh<Self>) -> Option<MeshTriangleInfo> { None }
+    fn build_mesh<TM: TriangleMesh<Data = Self> + ?Sized>(mesh: &TM) -> Option<MeshTriangleInfo> { None }
     fn contract_edge(mesh: &mut ClosedTriangleMesh<Self>, collapse_info: Self::CollapseInfoInput) -> Self::CollapseInfoOutput;
     fn uncontract_edge(mesh: &mut ClosedTriangleMesh<Self>, collapse_info: Self::CollapseInfoOutput) {
 
@@ -40,7 +41,7 @@ impl MeshData for () {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, serde::Deserialize, serde::Serialize)]
 pub struct TriangleMeshHalfEdgeCollapse {
     pub source: (Index<Node>, Node),
     pub target: Index<Node>,
@@ -77,6 +78,8 @@ pub trait TriangleMesh:
     + core::ops::Index<Index<Edge>, Output = <List<Edge> as core::ops::Index<Index<Edge>>>::Output> 
     + core::ops::Index<Index<Triangle>, Output = <List<Triangle> as core::ops::Index<Index<Triangle>>>::Output> {
     type Data: MeshData;
+    fn nodes(&self) -> &List<Node>;
+    fn current_nodes(&self) -> Vec<(Index<Node>, Node)>;
     fn edges(&self) -> &List<Edge>;
     fn current_edges(&self) -> Vec<(Index<Edge>, Edge)>;
     fn current_edges_undirected(&self) -> Vec<(Index<Edge>, Edge)>;
@@ -84,11 +87,69 @@ pub trait TriangleMesh:
     fn current_triangles(&self) -> Vec<(Index<Triangle>, Triangle)>;
     fn triangle_data(&self) -> &List<Self::Data, Triangle>;
 
+    fn build_mesh(&self) -> MeshTriangleInfo {
+        if let Some(info) = Self::Data::build_mesh(self) {
+            return info;
+        }
+
+        let (colors, nodes): (Vec<[u8; 4]>, Vec<[f32; 3]>) = self.triangles()
+            .iter()
+            .cloned()
+            .filter_map(|tri| {
+                match tri {
+                    None => None,
+                    Some(tri) => {
+                        let color: [u8; 4] = [rand::random(), rand::random(), rand::random(), 128];
+                        let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
+                        // let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
+
+                        Some((color, nodes))
+                    }
+                }
+            })
+            .map(|(color, nodes)| {
+                nodes.into_iter().map(move |node| (color, node.map(|n| n as f32)))
+            })
+            .flatten()
+            .unzip();
+
+        let triangles = (0..nodes.len()).into_iter().zip(colors).collect();
+        MeshTriangleInfo { nodes, triangles }
+    }
+
     fn find_edge(&self, source: Index<Node>, target: Index<Node>) -> Option<Index<Edge>> {
         self[source].as_ref().unwrap().outgoing.iter().find(|edge| self[**edge].as_ref().unwrap().target == target).copied()
     }
+    fn next_outgoing(&self, index: Index<Edge>) -> Index<Edge> {
+        self[index].as_ref().unwrap().apply(|it| {
+            self[it.opposite].as_ref().unwrap().next
+        })
+    }
+    fn collect_outgoing_edges(&self, index: Index<Node>) -> Vec<Index<Edge>> {
+        self.collect_outgoing_edges_starting_with(self[index].as_ref().unwrap().outgoing[0])
+    }
+    fn collect_outgoing_edges_starting_with(&self, starting_edge: Index<Edge>) -> Vec<Index<Edge>> {
+        let mut edge = self.next_outgoing(starting_edge);
+        let mut outgoing = vec![edge];
+        while edge != starting_edge {
+            edge = self.next_outgoing(edge);
+            outgoing.push(edge);
+        }
+        outgoing
+    }
 }
 
+pub trait UncontractableMesh: TriangleMesh {
+    fn uncontract_edge(&mut self, info: <<Self as TriangleMesh>::Data as MeshData>::CollapseInfoOutput); 
+    fn uncontract_next_edge<F: FnOnce(&Self, &<<Self as TriangleMesh>::Data as MeshData>::CollapseInfoOutput)>(&mut self, before: F);
+}
+
+pub trait ContractableMesh: TriangleMesh {
+    fn contract_edge(&mut self, index: Index<Edge>) -> &<<Self as TriangleMesh>::Data as MeshData>::CollapseInfoOutput;
+    fn contract_next_edge(&mut self) -> &<<Self as TriangleMesh>::Data as MeshData>::CollapseInfoOutput;
+}
+
+#[derive(Clone)]
 pub struct SimulatedEdgeCollapse<'m, TD: MeshData, TM: TriangleMesh> {
     collapsed_edges: HashMap<Index<Edge>, Option<Edge>>,
     collapsed_nodes: HashMap<Index<Node>, Index<Node>>,
@@ -99,7 +160,15 @@ pub struct SimulatedEdgeCollapse<'m, TD: MeshData, TM: TriangleMesh> {
 
 impl<'m, TD: MeshData, TM: TriangleMesh<Data = TD>> TriangleMesh for SimulatedEdgeCollapse<'m, TD, TM> {
     type Data = TD;
-
+    fn nodes(&self) -> &List<Node> {
+        self.original.nodes()
+    }
+    fn current_nodes(&self) -> Vec<(Index<Node>, Node)> {
+        self.original.current_nodes()
+        .into_iter()
+        .filter(|node| self.collapsed_nodes.get(&node.0).is_some())
+        .collect()
+    }
     fn edges(&self) -> &List<Edge> {
         self.original.edges()
     }
@@ -167,6 +236,15 @@ where
 
 impl<TD: MeshData> TriangleMesh for ClosedTriangleMesh<TD> {
     type Data = TD;
+
+    fn nodes(&self) -> &List<Node> {
+        &self.nodes
+    }
+    fn current_nodes(&self) -> Vec<(Index<Node>, Node)> {
+        self.nodes.enumerate_some()
+            .map(|(index, node)| (index, node.clone()))
+            .collect()
+    }
 
     fn edges(&self) -> &List<Edge> {
         &self.edges
@@ -282,37 +360,17 @@ impl<TD: MeshData> FromMeshBuilder for ClosedTriangleMesh<TD> {
     }
 }
 
-impl<TD: MeshData> ClosedTriangleMesh<TD> {
-    
-    pub fn build_mesh(&self) -> MeshTriangleInfo {
-        if let Some(info) = TD::build_mesh(self) {
-            return info;
-        }
-
-        let (colors, nodes): (Vec<[u8; 4]>, Vec<[f32; 3]>) = self.triangles
-            .iter()
-            .cloned()
-            .filter_map(|tri| {
-                match tri {
-                    None => None,
-                    Some(tri) => {
-                        let color: [u8; 4] = [rand::random(), rand::random(), rand::random(), 128];
-                        let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
-                        // let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
-
-                        Some((color, nodes))
-                    }
-                }
-            })
-            .map(|(color, nodes)| {
-                nodes.into_iter().map(move |node| (color, node.map(|n| n as f32)))
-            })
-            .flatten()
-            .unzip();
-
-        let triangles = (0..nodes.len()).into_iter().zip(colors).collect();
-        MeshTriangleInfo { nodes, triangles }
+impl<TD> ClosedTriangleMesh<TD>
+where 
+    TD: MeshData<CollapseInfoInput = TriangleMeshHalfEdgeCollapse, CollapseInfoOutput = TriangleMeshHalfEdgeCollapse>,
+{
+    pub fn drop_data(&self) -> ClosedTriangleMesh<()> {
+        let ClosedTriangleMesh { nodes, edges, triangles, triangle_data, contraction_order, undo_contraction } = self.clone();
+        ClosedTriangleMesh { nodes, edges, triangle_data: List::with_defaults(self.triangles.len()), triangles, contraction_order, undo_contraction }
     }
+}
+
+impl<TD: MeshData> ClosedTriangleMesh<TD> {
 
     pub fn has_node(&self, node: Index<Node>) -> bool {
         if (0..self.nodes.len()).contains(&node) {
@@ -474,108 +532,274 @@ impl<TD: MeshData> ClosedTriangleMesh<TD> {
             _data: PhantomData 
         }
     }
-
-    pub fn uncontract_next_edge(&mut self) {
-        let info = self.undo_contraction.pop();
-        self.uncontract_edge(info.unwrap());
-    }
-
-    pub fn uncontract_edge(&mut self, info: TD::CollapseInfoOutput) {
-        let source = info.source(); 
-        let target = info.target(); 
-        let facettes = info.facettes(); 
-        let removed_edges = info.removed_edges(); 
-        let removed_facettes = info.removed_facettes();
-
-        let (idx_source, source) = source;
-        let (idx_st, st) = removed_edges.last().as_deref().cloned().unwrap();
-
-        let removed_edge_indices = removed_edges.iter().map(|(i, _)| i).cloned().collect::<Vec<_>>();
-        for (index, edge) in removed_edges {
-            self[index] = Some(edge);
-        }
-
-        for (index, facette) in removed_facettes {
-            self[index] = facette
-        }
-
-        // Correct all edges which were originally outgoing from s
-        for outgoing in source.outgoing.clone() {
-            self[outgoing].as_mut().unwrap().source = idx_source;
-            let opposite = self[outgoing].as_ref().unwrap().opposite;
-            self[opposite].as_mut().unwrap().target = idx_source;
-        }
-        self[idx_source] = Some(source.clone());
-
-        self[st.next].as_mut().unwrap().apply(|it| {
-            it.previous = idx_st;
-            it.next = st.previous;
-            it.triangle = st.triangle;
-        });
-        let ts = self[st.opposite].as_ref().cloned().unwrap();
-        self[ts.previous].as_mut().unwrap().apply(|it| {
-            it.next = st.opposite;
-            it.previous = ts.next;
-            it.triangle = ts.triangle;
-        });
-
-        for index in facettes {
-            let facette = self[index].as_mut().unwrap();
-            for corner in &mut facette.corners {
-                if *corner == target {
-                    *corner = idx_source
-                } 
-            }
-        }
-
-        // Restore the next and previous relations
-        let indices = (0..(source.outgoing.len())).collect::<Vec<_>>().also(|it| it.rotate_left(1));
-        for i in 0..(source.outgoing.len()) {
-            let edge = source.outgoing[i];
-            let opposite = self[edge].as_ref().unwrap().opposite;
-            self[opposite].as_mut().unwrap().next = source.outgoing[indices[i]];
-            self[source.outgoing[indices[i]]].as_mut().unwrap().previous = opposite;
-            let (a, next, previous, facette) = self[edge].as_ref().unwrap().apply(|it| (it.source, it.next, it.previous, it.triangle));
-            let (b, c) = self[next].as_mut().unwrap().apply(|it| {
-                it.next = previous;
-                it.previous = edge;
-                it.triangle = facette;
-                (it.source, it.target)
-            });
-            self[facette].as_mut().unwrap().corners = [a, b, c];
-        }
-        for removed_edge in &removed_edge_indices {
-            self.previous_edge_mut(*removed_edge).unwrap().next = *removed_edge;
-            self.next_edge_mut(*removed_edge).unwrap().previous = *removed_edge;
-        }
-        let (ta, a) = (st.next, self[st.next].as_ref().unwrap().target);
-        let (dt, d) = self[st.opposite].as_ref().unwrap().apply(|it| (it.previous, self[it.previous].as_ref().unwrap().source));
-        // self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(ts.source, self[self[ta].as_ref().unwrap().opposite].as_ref().unwrap().next);
-        self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(ts.source, ta);
-        self[a].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(a, self[ta].as_ref().unwrap().opposite);
-        self[d].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(d, dt);
-
-        let affected_edges = source.outgoing
-            .into_iter()
-            .filter_map(|idx| self[idx].as_ref().map(|edge| [idx, edge.opposite]))
-            .flatten()
-            .collect_vec()
-            .into_iter()
-            .chain(removed_edge_indices.into_iter());
-        self.update_contraction_order(affected_edges);
-    }
 }
 
 impl<TD> ClosedTriangleMesh<TD>
+where
+    TD: MeshData<CollapseInfoOutput = TriangleMeshHalfEdgeCollapse>,
+{
+    pub fn save_to_dir(self, dir: &mut std::path::PathBuf, name: &str) {
+        if dir.exists() && !dir.is_dir() {
+            panic!("{} should be a directory to save to", dir.display());
+        }
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir).unwrap();
+        }
+
+        dir.push(name);
+
+        let nodes = dir.clone().also(|dir| { dir.add_extension("ver"); } );
+        let nodes_full = dir.clone().also(|dir| { dir.add_extension("ver_full"); } );
+        let triangles = dir.clone().also(|dir| { dir.add_extension("tri"); } );
+        let edges = dir.clone().also(|dir| { dir.add_extension("edg"); } );
+        let map_nodes = dir.clone().also(|dir| { dir.add_extension("ver_map"); } );
+        let map_triangles = dir.clone().also(|dir| { dir.add_extension("tri_map"); } );
+        let map_edges = dir.clone().also(|dir| { dir.add_extension("edg_map"); } );
+        let uncontraction = dir.clone().also(|dir| { dir.add_extension("hec"); } );
+
+        let (idx_nodes, _nodes): (Vec<_>, Vec<_>) = self.nodes.enumerate_some()
+            .into_iter()
+            .enumerate()
+            .map(|(i, (idx, node))| ((i + 1, idx), (idx, node)))
+            .unzip();
+        let (idx_edges, _edges): (Vec<_>, Vec<_>) = self.edges.enumerate_some()
+            .into_iter()
+            .enumerate()
+            .map(|(i, (idx, edge))| ((i + 1, idx), (idx, edge)))
+            .unzip();
+        let (idx_triangles, _triangles): (Vec<_>, Vec<_>) = self.triangles.enumerate_some()
+            .into_iter()
+            .enumerate()
+            .map(|(i, (idx, triangle))| ((i + 1, idx), (idx, triangle)))
+            .unzip();
+        let map_node_idx = move |id: Index<Node>| {
+            idx_nodes.iter().find(|(_, idx)| *idx == id).unwrap().0
+        };
+        let map_edge_idx = move |id: Index<Edge>| {
+            idx_edges.iter().find(|(_, idx)| *idx == id).unwrap().0
+        };
+        let map_triangle_idx = move |id: Index<Triangle>| {
+            idx_triangles.iter().find(|(_, idx)| *idx == id).unwrap().0
+        };
+        _nodes.into_iter()
+            .map(|(idx, node)| (idx, node.coordinates))
+            .unzip()
+            .apply(|(idx, n): (Vec<Index<Node>>, Vec<_>)| {
+                std::fs::write(nodes, n.into_iter().map(|it| it.map(|i| std::format!("{i:.15}")).join(",")).join("\n")).unwrap();
+                std::fs::write(map_nodes, idx.into_iter().map(|idx| *idx).join("\n")).unwrap();
+            });
+        std::fs::write(nodes_full, serde_json::to_string_pretty(&self.nodes).unwrap()).unwrap();
+
+        self.triangles.enumerate_some()
+            .into_iter()
+            .map(|(idx, tri)| (idx, tri.corners))
+            .unzip()
+            .apply(|(idx, t): (Vec<_>, Vec<_>)| {
+                std::fs::write(triangles, t.into_iter().map(|it| it.map(|i| std::format!("{}", map_node_idx(i))).join(",")).join("\n")).unwrap();
+                std::fs::write(map_triangles, idx.into_iter().map(|idx| *idx).join("\n")).unwrap();
+            });
+
+        self.edges.enumerate_some()
+            .into_iter()
+            .unzip()
+            .apply(|(idx, e): (Vec<_>, Vec<_>)| {
+                std::fs::write(edges, e.into_iter().map(|it| std::format!("{},{},{},{},{},{}", map_node_idx(it.source), map_node_idx(it.target), map_edge_idx(it.opposite), map_edge_idx(it.previous), map_edge_idx(it.next), map_triangle_idx(it.triangle))).join("\n")).unwrap();
+                std::fs::write(map_edges, idx.into_iter().map(|idx| *idx).join("\n")).unwrap();
+            });
+
+        self.undo_contraction.into_iter()
+            // .map(|info: TriangleMeshHalfEdgeCollapse| {
+            //     TriangleMeshHalfEdgeCollapse {
+            //         source: ((*info.source.0 + 1).into(), info.source.1),
+            //         target: (*info.target + 1).into(),
+            //         facettes: info.facettes.into_iter()
+            //             .map(|face| (*face + 1).into())
+            //             .collect_vec(),
+            //         removed_edges: info.removed_edges.into_iter()
+            //             .map(|(idx, edge)| {
+            //                 let edge = Edge {
+            //                     next: (*edge.next + 1).into(),
+            //                     previous: (*edge.previous + 1).into(),
+            //                     opposite: (*edge.opposite + 1).into(),
+            //                     source: (*edge.source + 1).into(),
+            //                     target: (*edge.target + 1).into(),
+            //                     triangle: (*edge.triangle + 1).into(),
+            //                 };
+            //                 (idx, edge)
+            //             })
+            //             .collect_vec(),
+            //         removed_facettes: info.removed_facettes.map(|(idx, face)| {
+            //             let face = face.map(|f| {
+            //                 Triangle {
+            //                     corners: f.corners.map(|c| (*c + 1).into())
+            //                 }
+            //             });
+            //             (idx, face)
+            //         } )
+            //     }
+            // })
+            .collect_vec()
+            .apply(|it| {
+                std::fs::write(uncontraction, serde_json::to_string_pretty(&it).unwrap()).unwrap();
+            });
+    }
+
+    pub fn restore_from_dir(dir: &mut std::path::PathBuf, name: &str) -> Self {
+        dir.push(name);
+
+        let nodes = dir.clone().also(|dir| { dir.add_extension("ver_full"); } );
+        let triangles = dir.clone().also(|dir| { dir.add_extension("tri"); } );
+        let edges = dir.clone().also(|dir| { dir.add_extension("edg"); } );
+        let map_nodes = dir.clone().also(|dir| { dir.add_extension("ver_map"); } );
+        let map_triangles = dir.clone().also(|dir| { dir.add_extension("tri_map"); } );
+        let map_edges = dir.clone().also(|dir| { dir.add_extension("edg_map"); } );
+        let uncontraction: Vec<TriangleMeshHalfEdgeCollapse> = serde_json::from_slice(&std::fs::read(dir.clone().also(|dir| { dir.add_extension("hec"); } )).unwrap()).unwrap();
+
+        let map_nodes = csv::ReaderBuilder::new().has_headers(false)
+            .from_path(map_nodes)
+            .unwrap()
+            .deserialize()
+            .into_iter()
+            .map(|c| c.unwrap())
+            .enumerate()
+            .map(|(i, idx): (usize, usize)| {
+                (i, idx.into()) as (_, Index<Node>)
+            })
+            .collect_vec();
+        let map_edges = csv::ReaderBuilder::new().has_headers(false)
+            .from_path(map_edges)
+            .unwrap()
+            .deserialize()
+            .into_iter()
+            .map(|c| c.unwrap())
+            .enumerate()
+            .map(|(i, idx): (usize, usize)| {
+                (i, idx.into()) as (_, Index<Edge>)
+            })
+            .collect_vec();
+        let map_triangles = csv::ReaderBuilder::new().has_headers(false)
+            .from_path(map_triangles)
+            .unwrap()
+            .deserialize()
+            .into_iter()
+            .map(|c| c.unwrap())
+            .enumerate()
+            .map(|(i, idx): (usize, usize)| {
+                (i, idx.into()) as (_, Index<Triangle>)
+            })
+            .collect_vec();
+
+        let nodes: List<Node> = serde_json::from_slice(&std::fs::read(nodes).unwrap()).unwrap();
+        // let nodes = csv::ReaderBuilder::new().has_headers(false)
+        //     .from_path(nodes)
+        //     .unwrap()
+        //     .deserialize()
+        //     .into_iter()
+        //     .map(|c| c.unwrap())
+        //     .enumerate()
+        //     .map(|(idx, coordinates): (usize, [f64; 3])| {
+        //         (map_nodes[idx].1, Node::new(coordinates))
+        //     })
+        //     .collect_vec();
+        let edges = csv::ReaderBuilder::new().has_headers(false)
+            .from_path(edges)
+            .unwrap()
+            .deserialize()
+            .into_iter()
+            .map(|c| c.unwrap())
+            .enumerate()
+            .map(|(idx, (source, target, opposite, previous, next, triangle)): (usize, (usize, usize, usize, usize, usize, usize))| {
+                (map_edges[idx].1, Edge {
+                    source: map_nodes[source - 1].1,
+                    target: map_nodes[target - 1].1,
+                    opposite: map_edges[opposite - 1].1,
+                    previous: map_edges[previous - 1].1,
+                    next: map_edges[next - 1].1,
+                    triangle: map_triangles[triangle - 1].1,
+                })
+            })
+            .collect_vec();
+        let triangles = csv::ReaderBuilder::new().has_headers(false)
+            .from_path(triangles)
+            .unwrap()
+            .deserialize()
+            .into_iter()
+            .map(|c| c.unwrap())
+            .enumerate()
+            .map(|(idx, (a,b,c)): (usize, (usize, usize, usize))| {
+                (map_triangles[idx].1, Triangle { corners: [a,b,c].map(|i| map_nodes[i - 1].1) })
+            })
+            .collect_vec();
+
+        // let nodes = {
+        //     let max = nodes.len() + uncontraction.len();
+        //     let mut list = List::with_defaults(max);
+        //     nodes.into_iter().for_each(|(idx, node)| { list[idx] = Some(node) });
+        //     list
+        // };
+        let edges = {
+            let max = edges.len() + 6 * uncontraction.len();
+            let mut list = List::with_defaults(max);
+            edges.into_iter().for_each(|(idx, edge)| { list[idx] = Some(edge) });
+            list
+        };
+        let triangles = {
+            let max = triangles.len() + 2 * uncontraction.len();
+            let mut list = List::with_defaults(max);
+            triangles.into_iter().for_each(|(idx, triangle)| { list[idx] = Some(triangle) });
+            list
+        };
+        let undo_contraction = uncontraction.into_iter()
+            // .map(|info| {
+            //     TriangleMeshHalfEdgeCollapse {
+            //         source: ((*info.source.0 - 1).into(), info.source.1),
+            //         target: (*info.target - 1).into(),
+            //         facettes: info.facettes.into_iter()
+            //             .map(|face| (*face - 1).into())
+            //             .collect_vec(),
+            //         removed_edges: info.removed_edges.into_iter()
+            //             .map(|(idx, edge)| {
+            //                 let edge = Edge {
+            //                     next: (*edge.next - 1).into(),
+            //                     previous: (*edge.previous - 1).into(),
+            //                     opposite: (*edge.opposite - 1).into(),
+            //                     source: (*edge.source - 1).into(),
+            //                     target: (*edge.target - 1).into(),
+            //                     triangle: (*edge.triangle - 1).into(),
+            //                 };
+            //                 (idx, edge)
+            //             })
+            //             .collect_vec(),
+            //         removed_facettes: info.removed_facettes.map(|(idx, face)| {
+            //             let face = face.map(|f| {
+            //                 Triangle {
+            //                     corners: f.corners.map(|c| (*c - 1).into())
+            //                 }
+            //             });
+            //             (idx, face)
+            //         } )
+            //     }
+            // })
+            .collect();
+
+        let mut mesh = Self {
+            contraction_order: DoublePriorityQueue::with_capacity(edges.len()),
+            triangle_data: List::with_capacity(triangles.len()),
+            nodes,
+            edges,
+            triangles,
+            undo_contraction
+        };
+        // mesh.generate_contraction_order();
+        mesh
+    }
+}
+
+impl<TD> ContractableMesh for ClosedTriangleMesh<TD>
 where 
     TD: MeshData<CollapseInfoInput = TriangleMeshHalfEdgeCollapse>,
 {
-    pub fn contract_next_edge(&mut self) -> &TD::CollapseInfoOutput {
-        let next = self.contraction_order.pop_min();
-        self.contract_edge(next.unwrap().0)
-    }
-
-    pub fn contract_edge(&mut self, index: Index<Edge>) -> &TD::CollapseInfoOutput {
+    fn contract_edge(&mut self, index: Index<Edge>) -> &TD::CollapseInfoOutput {
 
         // Update the edges attached to the facettes edge_facette/opposite_facette.
         // Those facettes are removed and attached to the next facettes counterclockwise/clockwise with respect to the source node.
@@ -709,10 +933,113 @@ where
         self.undo_contraction.push(info);
         &self.undo_contraction.last().unwrap()
     }
+
+    fn contract_next_edge(&mut self) -> &TD::CollapseInfoOutput {
+        let next = self.contraction_order.pop_min();
+        self.contract_edge(next.unwrap().0)
+    }
+}
+
+impl<TD> UncontractableMesh for ClosedTriangleMesh<TD> 
+where 
+    TD: MeshData<CollapseInfoInput = TriangleMeshHalfEdgeCollapse>,
+{
+    fn uncontract_edge(&mut self, info: TD::CollapseInfoOutput) {
+        let source = info.source(); 
+        let target = info.target(); 
+        let facettes = info.facettes(); 
+        let removed_edges = info.removed_edges(); 
+        let removed_facettes = info.removed_facettes();
+
+        let (idx_source, source) = source;
+        let (idx_st, st) = removed_edges.last().as_deref().cloned().unwrap();
+
+        let removed_edge_indices = removed_edges.iter().map(|(i, _)| i).cloned().collect::<Vec<_>>();
+        for (index, edge) in removed_edges {
+            self[index] = Some(edge);
+        }
+
+        for (index, facette) in removed_facettes {
+            self[index] = facette
+        }
+
+        // Correct all edges which were originally outgoing from s
+        for outgoing in source.outgoing.clone() {
+            self[outgoing].as_mut().unwrap().source = idx_source;
+            let opposite = self[outgoing].as_ref().unwrap().opposite;
+            self[opposite].as_mut().unwrap().target = idx_source;
+        }
+        self[idx_source] = Some(source.clone());
+
+        self[st.next].as_mut().unwrap().apply(|it| {
+            it.previous = idx_st;
+            it.next = st.previous;
+            it.triangle = st.triangle;
+        });
+        let ts = self[st.opposite].as_ref().cloned().unwrap();
+        self[ts.previous].as_mut().unwrap().apply(|it| {
+            it.next = st.opposite;
+            it.previous = ts.next;
+            it.triangle = ts.triangle;
+        });
+
+        for index in facettes {
+            let facette = self[index].as_mut().unwrap();
+            for corner in &mut facette.corners {
+                if *corner == target {
+                    *corner = idx_source
+                } 
+            }
+        }
+
+        // Restore the next and previous relations
+        let indices = (0..(source.outgoing.len())).collect::<Vec<_>>().also(|it| it.rotate_left(1));
+        for i in 0..(source.outgoing.len()) {
+            let edge = source.outgoing[i];
+            let opposite = self[edge].as_ref().unwrap().opposite;
+            self[opposite].as_mut().unwrap().next = source.outgoing[indices[i]];
+            self[source.outgoing[indices[i]]].as_mut().unwrap().previous = opposite;
+            let (a, next, previous, facette) = self[edge].as_ref().unwrap().apply(|it| (it.source, it.next, it.previous, it.triangle));
+            let (b, c) = self[next].as_mut().unwrap().apply(|it| {
+                it.next = previous;
+                it.previous = edge;
+                it.triangle = facette;
+                (it.source, it.target)
+            });
+            self[facette].as_mut().unwrap().corners = [a, b, c];
+        }
+        for removed_edge in &removed_edge_indices {
+            self.previous_edge_mut(*removed_edge).unwrap().next = *removed_edge;
+            self.next_edge_mut(*removed_edge).unwrap().previous = *removed_edge;
+        }
+        let (ta, a) = (st.next, self[st.next].as_ref().unwrap().target);
+        let (dt, d) = self[st.opposite].as_ref().unwrap().apply(|it| (it.previous, self[it.previous].as_ref().unwrap().source));
+        // self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(ts.source, self[self[ta].as_ref().unwrap().opposite].as_ref().unwrap().next);
+        self[ts.source].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(ts.source, ta);
+        self[a].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(a, self[ta].as_ref().unwrap().opposite);
+        self[d].as_mut().unwrap().outgoing = self.collect_outgoing_edges_starting_with(d, dt);
+
+        let affected_edges = source.outgoing
+            .into_iter()
+            .filter_map(|idx| self[idx].as_ref().map(|edge| [idx, edge.opposite]))
+            .flatten()
+            .collect_vec()
+            .into_iter()
+            .chain(removed_edge_indices.into_iter());
+        self.update_contraction_order(affected_edges);
+    }
+
+    fn uncontract_next_edge<F: FnOnce(&Self, &<<Self as TriangleMesh>::Data as MeshData>::CollapseInfoOutput)>(&mut self, before: F) {
+        let info = self.undo_contraction.pop().unwrap();
+        before(self, &info);
+        self.uncontract_edge(info.clone());
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use crate::mesh::{builder, MeshBuilderError, UnfinishedNode};
 
     use super::*;
@@ -1001,8 +1328,8 @@ mod tests {
         let next = mesh.contraction_order.peek_min();
         println!("next: {:?}", mesh.contraction_order.peek_min());
         let second = mesh.contract_next_edge();
-        mesh.uncontract_next_edge();
-        mesh.uncontract_next_edge();
+        mesh.uncontract_next_edge(|_, _| {});
+        mesh.uncontract_next_edge(|_, _| {});
         copy.nodes.iter().zip(mesh.nodes.iter()).for_each(|(orig, node)| {
             assert_eq!(orig.is_some(), node.is_some());
             if orig.is_some() {
@@ -1059,5 +1386,70 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(facettes_with_zero.is_empty(), "facettes containing zero: {:?}", facettes_with_zero);
         Ok(())
+    }
+
+    #[test]
+    fn save_restore_cube() {
+        let mesh = cube();
+        mesh.clone().save_to_dir(&mut PathBuf::from("./test_output/"), "orbifold");
+        let copy = ClosedTriangleMesh::<()>::restore_from_dir(&mut PathBuf::from("./test_output/"), "orbifold");
+        
+        copy.nodes.iter().zip(mesh.nodes.iter()).for_each(|(orig, node)| {
+            assert_eq!(orig.is_some(), node.is_some());
+            if orig.is_some() {
+                let (orig, node) = (orig.clone().unwrap(), node.clone().unwrap());
+                assert_eq!(orig.coordinates, node.coordinates);
+                for outgoing in &orig.outgoing {
+                    assert!(node.outgoing.contains(outgoing))
+                }
+                for outgoing in &node.outgoing {
+                    assert!(orig.outgoing.contains(outgoing))
+                }
+            }
+        });
+        for (index, (copy, orig)) in copy.edges.iter().zip(mesh.edges.iter()).enumerate() {
+            assert_eq!(orig.is_some(), copy.is_some(), "edges are different at {index}");
+            let (orig, copy) = (orig.clone().unwrap(), copy.clone().unwrap());
+            assert_eq!(orig, copy, "edges are different at {index}");
+            assert_eq!(orig.next, copy.next, "edges are different at {index}: next: {}, {}", orig.next, copy.next);
+            assert_eq!(orig.previous, copy.previous, "edges are different at {index}: previous: {}, {}", orig.previous, copy.previous);
+            assert_eq!(orig.opposite, copy.opposite, "edges are different at {index}: opposite: {}, {}", orig.opposite, copy.opposite);
+            assert_eq!(orig.triangle, copy.triangle, "edges are different at {index}: facette: {}, {}", orig.triangle, copy.triangle);
+        }
+        assert_eq!(copy.triangles, mesh.triangles);
+    }
+
+    #[test]
+    fn save_restore_cube_hec() {
+        let mut mesh = cube();
+        mesh.contract_edge(0.into());
+        mesh.clone().save_to_dir(&mut PathBuf::from("./test_output/"), "orbifold");
+        let copy = ClosedTriangleMesh::<()>::restore_from_dir(&mut PathBuf::from("./test_output/"), "orbifold");
+        
+        copy.nodes.iter().zip(mesh.nodes.iter()).for_each(|(orig, node)| {
+            assert_eq!(orig.is_some(), node.is_some());
+            if orig.is_some() {
+                let (orig, node) = (orig.clone().unwrap(), node.clone().unwrap());
+                assert_eq!(orig.coordinates, node.coordinates);
+                for outgoing in &orig.outgoing {
+                    assert!(node.outgoing.contains(outgoing))
+                }
+                for outgoing in &node.outgoing {
+                    assert!(orig.outgoing.contains(outgoing))
+                }
+            }
+        });
+        for (index, (copy, orig)) in copy.edges.iter().zip(mesh.edges.iter()).enumerate() {
+            assert_eq!(orig.is_some(), copy.is_some(), "edges are different at {index}");
+            if orig.is_some() {
+                let (orig, copy) = (orig.clone().unwrap(), copy.clone().unwrap());
+                assert_eq!(orig, copy, "edges are different at {index}");
+                assert_eq!(orig.next, copy.next, "edges are different at {index}: next: {}, {}", orig.next, copy.next);
+                assert_eq!(orig.previous, copy.previous, "edges are different at {index}: previous: {}, {}", orig.previous, copy.previous);
+                assert_eq!(orig.opposite, copy.opposite, "edges are different at {index}: opposite: {}, {}", orig.opposite, copy.opposite);
+                assert_eq!(orig.triangle, copy.triangle, "edges are different at {index}: facette: {}, {}", orig.triangle, copy.triangle);
+            }
+        }
+        assert_eq!(copy.triangles, mesh.triangles);
     }
 }

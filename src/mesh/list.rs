@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, ops::{Deref, DerefMut}, usize};
 
 #[derive(Debug, Hash)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Index<T> {
     index: usize,
     _data: PhantomData<T>
@@ -63,6 +64,7 @@ impl<T> Deref for ListIndexTransformations<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct List<T, I = T>(Vec<Option<T>>, PhantomData<I>);
 
 impl<T, I> core::ops::Index<Index<I>> for List<T, I> {

@@ -4,6 +4,8 @@
 #![feature(type_changing_struct_update)]
 #![feature(generic_const_exprs)]
 #![feature(iter_array_chunks)]
+#![feature(path_add_extension)]
+
 pub mod mesh;
 pub use mesh::ClosedTriangleMesh;
 
