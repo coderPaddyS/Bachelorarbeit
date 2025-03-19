@@ -1,0 +1,2872 @@
+[
+  {
+    "source": [
+      {
+        "index": 7,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          0.0,
+          -0.75,
+          -0.75
+        ],
+        "outgoing": [
+          {
+            "index": 2,
+            "_data": null
+          },
+          {
+            "index": 136,
+            "_data": null
+          },
+          {
+            "index": 31,
+            "_data": null
+          },
+          {
+            "index": 1,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 18,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 44,
+        "_data": null
+      },
+      {
+        "index": 7,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 1,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 0,
+            "_data": null
+          },
+          "opposite": {
+            "index": 0,
+            "_data": null
+          },
+          "previous": {
+            "index": 30,
+            "_data": null
+          },
+          "next": {
+            "index": 29,
+            "_data": null
+          },
+          "triangle": {
+            "index": 7,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 0,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 0,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 1,
+            "_data": null
+          },
+          "previous": {
+            "index": 4,
+            "_data": null
+          },
+          "next": {
+            "index": 2,
+            "_data": null
+          },
+          "triangle": {
+            "index": 0,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 137,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 5,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 136,
+            "_data": null
+          },
+          "previous": {
+            "index": 138,
+            "_data": null
+          },
+          "next": {
+            "index": 31,
+            "_data": null
+          },
+          "triangle": {
+            "index": 44,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 136,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 5,
+            "_data": null
+          },
+          "opposite": {
+            "index": 137,
+            "_data": null
+          },
+          "previous": {
+            "index": 3,
+            "_data": null
+          },
+          "next": {
+            "index": 135,
+            "_data": null
+          },
+          "triangle": {
+            "index": 43,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 3,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 7,
+            "_data": null
+          },
+          "opposite": {
+            "index": 2,
+            "_data": null
+          },
+          "previous": {
+            "index": 135,
+            "_data": null
+          },
+          "next": {
+            "index": 136,
+            "_data": null
+          },
+          "triangle": {
+            "index": 43,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 2,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 7,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 3,
+            "_data": null
+          },
+          "previous": {
+            "index": 0,
+            "_data": null
+          },
+          "next": {
+            "index": 4,
+            "_data": null
+          },
+          "triangle": {
+            "index": 0,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 0,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 0,
+              "_data": null
+            },
+            {
+              "index": 7,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 43,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 5,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 6,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          0.75,
+          -0.75,
+          0.0
+        ],
+        "outgoing": [
+          {
+            "index": 8,
+            "_data": null
+          },
+          {
+            "index": 10,
+            "_data": null
+          },
+          {
+            "index": 65,
+            "_data": null
+          },
+          {
+            "index": 7,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 18,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 2,
+        "_data": null
+      },
+      {
+        "index": 23,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 65,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 2,
+            "_data": null
+          },
+          "opposite": {
+            "index": 64,
+            "_data": null
+          },
+          "previous": {
+            "index": 11,
+            "_data": null
+          },
+          "next": {
+            "index": 87,
+            "_data": null
+          },
+          "triangle": {
+            "index": 23,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 64,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 2,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 65,
+            "_data": null
+          },
+          "previous": {
+            "index": 66,
+            "_data": null
+          },
+          "next": {
+            "index": 7,
+            "_data": null
+          },
+          "triangle": {
+            "index": 16,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 9,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 0,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 8,
+            "_data": null
+          },
+          "previous": {
+            "index": 12,
+            "_data": null
+          },
+          "next": {
+            "index": 10,
+            "_data": null
+          },
+          "triangle": {
+            "index": 2,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 8,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 0,
+            "_data": null
+          },
+          "opposite": {
+            "index": 9,
+            "_data": null
+          },
+          "previous": {
+            "index": 6,
+            "_data": null
+          },
+          "next": {
+            "index": 5,
+            "_data": null
+          },
+          "triangle": {
+            "index": 1,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 6,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 6,
+            "_data": null
+          },
+          "opposite": {
+            "index": 7,
+            "_data": null
+          },
+          "previous": {
+            "index": 5,
+            "_data": null
+          },
+          "next": {
+            "index": 8,
+            "_data": null
+          },
+          "triangle": {
+            "index": 1,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 7,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 6,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 6,
+            "_data": null
+          },
+          "previous": {
+            "index": 64,
+            "_data": null
+          },
+          "next": {
+            "index": 66,
+            "_data": null
+          },
+          "triangle": {
+            "index": 16,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 16,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 2,
+              "_data": null
+            },
+            {
+              "index": 6,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 1,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 0,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 14,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          0.75,
+          0.75,
+          0.0
+        ],
+        "outgoing": [
+          {
+            "index": 34,
+            "_data": null
+          },
+          {
+            "index": 76,
+            "_data": null
+          },
+          {
+            "index": 63,
+            "_data": null
+          },
+          {
+            "index": 33,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 23,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 8,
+        "_data": null
+      },
+      {
+        "index": 19,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 76,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 23,
+            "_data": null
+          },
+          "target": {
+            "index": 2,
+            "_data": null
+          },
+          "opposite": {
+            "index": 77,
+            "_data": null
+          },
+          "previous": {
+            "index": 35,
+            "_data": null
+          },
+          "next": {
+            "index": 75,
+            "_data": null
+          },
+          "triangle": {
+            "index": 19,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 77,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 2,
+            "_data": null
+          },
+          "target": {
+            "index": 23,
+            "_data": null
+          },
+          "opposite": {
+            "index": 76,
+            "_data": null
+          },
+          "previous": {
+            "index": 78,
+            "_data": null
+          },
+          "next": {
+            "index": 63,
+            "_data": null
+          },
+          "triangle": {
+            "index": 20,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 32,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 1,
+            "_data": null
+          },
+          "target": {
+            "index": 23,
+            "_data": null
+          },
+          "opposite": {
+            "index": 33,
+            "_data": null
+          },
+          "previous": {
+            "index": 36,
+            "_data": null
+          },
+          "next": {
+            "index": 34,
+            "_data": null
+          },
+          "triangle": {
+            "index": 8,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 33,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 23,
+            "_data": null
+          },
+          "target": {
+            "index": 1,
+            "_data": null
+          },
+          "opposite": {
+            "index": 32,
+            "_data": null
+          },
+          "previous": {
+            "index": 62,
+            "_data": null
+          },
+          "next": {
+            "index": 61,
+            "_data": null
+          },
+          "triangle": {
+            "index": 15,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 62,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 23,
+            "_data": null
+          },
+          "target": {
+            "index": 14,
+            "_data": null
+          },
+          "opposite": {
+            "index": 63,
+            "_data": null
+          },
+          "previous": {
+            "index": 61,
+            "_data": null
+          },
+          "next": {
+            "index": 33,
+            "_data": null
+          },
+          "triangle": {
+            "index": 15,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 63,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 14,
+            "_data": null
+          },
+          "target": {
+            "index": 23,
+            "_data": null
+          },
+          "opposite": {
+            "index": 62,
+            "_data": null
+          },
+          "previous": {
+            "index": 77,
+            "_data": null
+          },
+          "next": {
+            "index": 78,
+            "_data": null
+          },
+          "triangle": {
+            "index": 20,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 20,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 2,
+              "_data": null
+            },
+            {
+              "index": 14,
+              "_data": null
+            },
+            {
+              "index": 23,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 15,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 1,
+              "_data": null
+            },
+            {
+              "index": 23,
+              "_data": null
+            },
+            {
+              "index": 23,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 9,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          -0.0,
+          -0.75,
+          0.75
+        ],
+        "outgoing": [
+          {
+            "index": 16,
+            "_data": null
+          },
+          {
+            "index": 18,
+            "_data": null
+          },
+          {
+            "index": 89,
+            "_data": null
+          },
+          {
+            "index": 15,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 19,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 4,
+        "_data": null
+      },
+      {
+        "index": 31,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 89,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 19,
+            "_data": null
+          },
+          "target": {
+            "index": 3,
+            "_data": null
+          },
+          "opposite": {
+            "index": 88,
+            "_data": null
+          },
+          "previous": {
+            "index": 19,
+            "_data": null
+          },
+          "next": {
+            "index": 107,
+            "_data": null
+          },
+          "triangle": {
+            "index": 31,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 88,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 3,
+            "_data": null
+          },
+          "target": {
+            "index": 19,
+            "_data": null
+          },
+          "opposite": {
+            "index": 89,
+            "_data": null
+          },
+          "previous": {
+            "index": 90,
+            "_data": null
+          },
+          "next": {
+            "index": 15,
+            "_data": null
+          },
+          "triangle": {
+            "index": 24,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 17,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 0,
+            "_data": null
+          },
+          "target": {
+            "index": 19,
+            "_data": null
+          },
+          "opposite": {
+            "index": 16,
+            "_data": null
+          },
+          "previous": {
+            "index": 20,
+            "_data": null
+          },
+          "next": {
+            "index": 18,
+            "_data": null
+          },
+          "triangle": {
+            "index": 4,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 16,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 19,
+            "_data": null
+          },
+          "target": {
+            "index": 0,
+            "_data": null
+          },
+          "opposite": {
+            "index": 17,
+            "_data": null
+          },
+          "previous": {
+            "index": 14,
+            "_data": null
+          },
+          "next": {
+            "index": 13,
+            "_data": null
+          },
+          "triangle": {
+            "index": 3,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 14,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 19,
+            "_data": null
+          },
+          "target": {
+            "index": 9,
+            "_data": null
+          },
+          "opposite": {
+            "index": 15,
+            "_data": null
+          },
+          "previous": {
+            "index": 13,
+            "_data": null
+          },
+          "next": {
+            "index": 16,
+            "_data": null
+          },
+          "triangle": {
+            "index": 3,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 15,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 9,
+            "_data": null
+          },
+          "target": {
+            "index": 19,
+            "_data": null
+          },
+          "opposite": {
+            "index": 14,
+            "_data": null
+          },
+          "previous": {
+            "index": 88,
+            "_data": null
+          },
+          "next": {
+            "index": 90,
+            "_data": null
+          },
+          "triangle": {
+            "index": 24,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 24,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 3,
+              "_data": null
+            },
+            {
+              "index": 9,
+              "_data": null
+            },
+            {
+              "index": 19,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 3,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 0,
+              "_data": null
+            },
+            {
+              "index": 19,
+              "_data": null
+            },
+            {
+              "index": 19,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 8,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          0.75,
+          0.0,
+          -0.75
+        ],
+        "outgoing": [
+          {
+            "index": 70,
+            "_data": null
+          },
+          {
+            "index": 72,
+            "_data": null
+          },
+          {
+            "index": 132,
+            "_data": null
+          },
+          {
+            "index": 69,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 18,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 18,
+        "_data": null
+      },
+      {
+        "index": 41,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 132,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 5,
+            "_data": null
+          },
+          "opposite": {
+            "index": 133,
+            "_data": null
+          },
+          "previous": {
+            "index": 73,
+            "_data": null
+          },
+          "next": {
+            "index": 131,
+            "_data": null
+          },
+          "triangle": {
+            "index": 41,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 133,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 5,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 132,
+            "_data": null
+          },
+          "previous": {
+            "index": 134,
+            "_data": null
+          },
+          "next": {
+            "index": 69,
+            "_data": null
+          },
+          "triangle": {
+            "index": 42,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 71,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 2,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 70,
+            "_data": null
+          },
+          "previous": {
+            "index": 74,
+            "_data": null
+          },
+          "next": {
+            "index": 72,
+            "_data": null
+          },
+          "triangle": {
+            "index": 18,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 70,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 2,
+            "_data": null
+          },
+          "opposite": {
+            "index": 71,
+            "_data": null
+          },
+          "previous": {
+            "index": 68,
+            "_data": null
+          },
+          "next": {
+            "index": 67,
+            "_data": null
+          },
+          "triangle": {
+            "index": 17,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 68,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 18,
+            "_data": null
+          },
+          "target": {
+            "index": 8,
+            "_data": null
+          },
+          "opposite": {
+            "index": 69,
+            "_data": null
+          },
+          "previous": {
+            "index": 67,
+            "_data": null
+          },
+          "next": {
+            "index": 70,
+            "_data": null
+          },
+          "triangle": {
+            "index": 17,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 69,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 8,
+            "_data": null
+          },
+          "target": {
+            "index": 18,
+            "_data": null
+          },
+          "opposite": {
+            "index": 68,
+            "_data": null
+          },
+          "previous": {
+            "index": 133,
+            "_data": null
+          },
+          "next": {
+            "index": 134,
+            "_data": null
+          },
+          "triangle": {
+            "index": 42,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 42,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 5,
+              "_data": null
+            },
+            {
+              "index": 8,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 17,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 2,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            },
+            {
+              "index": 18,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 15,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          0.0,
+          0.75,
+          -0.75
+        ],
+        "outgoing": [
+          {
+            "index": 40,
+            "_data": null
+          },
+          {
+            "index": 42,
+            "_data": null
+          },
+          {
+            "index": 129,
+            "_data": null
+          },
+          {
+            "index": 39,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 22,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 10,
+        "_data": null
+      },
+      {
+        "index": 47,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 129,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 22,
+            "_data": null
+          },
+          "target": {
+            "index": 5,
+            "_data": null
+          },
+          "opposite": {
+            "index": 128,
+            "_data": null
+          },
+          "previous": {
+            "index": 43,
+            "_data": null
+          },
+          "next": {
+            "index": 143,
+            "_data": null
+          },
+          "triangle": {
+            "index": 47,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 128,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 5,
+            "_data": null
+          },
+          "target": {
+            "index": 22,
+            "_data": null
+          },
+          "opposite": {
+            "index": 129,
+            "_data": null
+          },
+          "previous": {
+            "index": 130,
+            "_data": null
+          },
+          "next": {
+            "index": 39,
+            "_data": null
+          },
+          "triangle": {
+            "index": 40,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 41,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 1,
+            "_data": null
+          },
+          "target": {
+            "index": 22,
+            "_data": null
+          },
+          "opposite": {
+            "index": 40,
+            "_data": null
+          },
+          "previous": {
+            "index": 44,
+            "_data": null
+          },
+          "next": {
+            "index": 42,
+            "_data": null
+          },
+          "triangle": {
+            "index": 10,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 40,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 22,
+            "_data": null
+          },
+          "target": {
+            "index": 1,
+            "_data": null
+          },
+          "opposite": {
+            "index": 41,
+            "_data": null
+          },
+          "previous": {
+            "index": 38,
+            "_data": null
+          },
+          "next": {
+            "index": 37,
+            "_data": null
+          },
+          "triangle": {
+            "index": 9,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 38,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 22,
+            "_data": null
+          },
+          "target": {
+            "index": 15,
+            "_data": null
+          },
+          "opposite": {
+            "index": 39,
+            "_data": null
+          },
+          "previous": {
+            "index": 37,
+            "_data": null
+          },
+          "next": {
+            "index": 40,
+            "_data": null
+          },
+          "triangle": {
+            "index": 9,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 39,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 15,
+            "_data": null
+          },
+          "target": {
+            "index": 22,
+            "_data": null
+          },
+          "opposite": {
+            "index": 38,
+            "_data": null
+          },
+          "previous": {
+            "index": 128,
+            "_data": null
+          },
+          "next": {
+            "index": 130,
+            "_data": null
+          },
+          "triangle": {
+            "index": 40,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 40,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 5,
+              "_data": null
+            },
+            {
+              "index": 15,
+              "_data": null
+            },
+            {
+              "index": 22,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 9,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 1,
+              "_data": null
+            },
+            {
+              "index": 22,
+              "_data": null
+            },
+            {
+              "index": 22,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 10,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          0.75,
+          0.0,
+          0.75
+        ],
+        "outgoing": [
+          {
+            "index": 82,
+            "_data": null
+          },
+          {
+            "index": 84,
+            "_data": null
+          },
+          {
+            "index": 92,
+            "_data": null
+          },
+          {
+            "index": 81,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 23,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 22,
+        "_data": null
+      },
+      {
+        "index": 25,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 92,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 23,
+            "_data": null
+          },
+          "target": {
+            "index": 3,
+            "_data": null
+          },
+          "opposite": {
+            "index": 93,
+            "_data": null
+          },
+          "previous": {
+            "index": 85,
+            "_data": null
+          },
+          "next": {
+            "index": 91,
+            "_data": null
+          },
+          "triangle": {
+            "index": 25,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 93,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 3,
+            "_data": null
+          },
+          "target": {
+            "index": 23,
+            "_data": null
+          },
+          "opposite": {
+            "index": 92,
+            "_data": null
+          },
+          "previous": {
+            "index": 94,
+            "_data": null
+          },
+          "next": {
+            "index": 81,
+            "_data": null
+          },
+          "triangle": {
+            "index": 26,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 83,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 2,
+            "_data": null
+          },
+          "target": {
+            "index": 23,
+            "_data": null
+          },
+          "opposite": {
+            "index": 82,
+            "_data": null
+          },
+          "previous": {
+            "index": 86,
+            "_data": null
+          },
+          "next": {
+            "index": 84,
+            "_data": null
+          },
+          "triangle": {
+            "index": 22,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 82,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 23,
+            "_data": null
+          },
+          "target": {
+            "index": 2,
+            "_data": null
+          },
+          "opposite": {
+            "index": 83,
+            "_data": null
+          },
+          "previous": {
+            "index": 80,
+            "_data": null
+          },
+          "next": {
+            "index": 79,
+            "_data": null
+          },
+          "triangle": {
+            "index": 21,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 80,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 23,
+            "_data": null
+          },
+          "target": {
+            "index": 10,
+            "_data": null
+          },
+          "opposite": {
+            "index": 81,
+            "_data": null
+          },
+          "previous": {
+            "index": 79,
+            "_data": null
+          },
+          "next": {
+            "index": 82,
+            "_data": null
+          },
+          "triangle": {
+            "index": 21,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 81,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 10,
+            "_data": null
+          },
+          "target": {
+            "index": 23,
+            "_data": null
+          },
+          "opposite": {
+            "index": 80,
+            "_data": null
+          },
+          "previous": {
+            "index": 93,
+            "_data": null
+          },
+          "next": {
+            "index": 94,
+            "_data": null
+          },
+          "triangle": {
+            "index": 26,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 26,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 3,
+              "_data": null
+            },
+            {
+              "index": 10,
+              "_data": null
+            },
+            {
+              "index": 23,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 21,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 2,
+              "_data": null
+            },
+            {
+              "index": 23,
+              "_data": null
+            },
+            {
+              "index": 23,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 11,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          -0.75,
+          -0.75,
+          -0.0
+        ],
+        "outgoing": [
+          {
+            "index": 24,
+            "_data": null
+          },
+          {
+            "index": 26,
+            "_data": null
+          },
+          {
+            "index": 109,
+            "_data": null
+          },
+          {
+            "index": 23,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 20,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 6,
+        "_data": null
+      },
+      {
+        "index": 39,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 109,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 20,
+            "_data": null
+          },
+          "target": {
+            "index": 4,
+            "_data": null
+          },
+          "opposite": {
+            "index": 108,
+            "_data": null
+          },
+          "previous": {
+            "index": 27,
+            "_data": null
+          },
+          "next": {
+            "index": 127,
+            "_data": null
+          },
+          "triangle": {
+            "index": 39,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 108,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 4,
+            "_data": null
+          },
+          "target": {
+            "index": 20,
+            "_data": null
+          },
+          "opposite": {
+            "index": 109,
+            "_data": null
+          },
+          "previous": {
+            "index": 110,
+            "_data": null
+          },
+          "next": {
+            "index": 23,
+            "_data": null
+          },
+          "triangle": {
+            "index": 32,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 25,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 0,
+            "_data": null
+          },
+          "target": {
+            "index": 20,
+            "_data": null
+          },
+          "opposite": {
+            "index": 24,
+            "_data": null
+          },
+          "previous": {
+            "index": 28,
+            "_data": null
+          },
+          "next": {
+            "index": 26,
+            "_data": null
+          },
+          "triangle": {
+            "index": 6,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 24,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 20,
+            "_data": null
+          },
+          "target": {
+            "index": 0,
+            "_data": null
+          },
+          "opposite": {
+            "index": 25,
+            "_data": null
+          },
+          "previous": {
+            "index": 22,
+            "_data": null
+          },
+          "next": {
+            "index": 21,
+            "_data": null
+          },
+          "triangle": {
+            "index": 5,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 22,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 20,
+            "_data": null
+          },
+          "target": {
+            "index": 11,
+            "_data": null
+          },
+          "opposite": {
+            "index": 23,
+            "_data": null
+          },
+          "previous": {
+            "index": 21,
+            "_data": null
+          },
+          "next": {
+            "index": 24,
+            "_data": null
+          },
+          "triangle": {
+            "index": 5,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 23,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 11,
+            "_data": null
+          },
+          "target": {
+            "index": 20,
+            "_data": null
+          },
+          "opposite": {
+            "index": 22,
+            "_data": null
+          },
+          "previous": {
+            "index": 108,
+            "_data": null
+          },
+          "next": {
+            "index": 110,
+            "_data": null
+          },
+          "triangle": {
+            "index": 32,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 32,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 4,
+              "_data": null
+            },
+            {
+              "index": 11,
+              "_data": null
+            },
+            {
+              "index": 20,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 5,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 0,
+              "_data": null
+            },
+            {
+              "index": 20,
+              "_data": null
+            },
+            {
+              "index": 20,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 12,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          -0.75,
+          0.0,
+          0.75
+        ],
+        "outgoing": [
+          {
+            "index": 102,
+            "_data": null
+          },
+          {
+            "index": 104,
+            "_data": null
+          },
+          {
+            "index": 112,
+            "_data": null
+          },
+          {
+            "index": 101,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 24,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 30,
+        "_data": null
+      },
+      {
+        "index": 33,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 112,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 24,
+            "_data": null
+          },
+          "target": {
+            "index": 4,
+            "_data": null
+          },
+          "opposite": {
+            "index": 113,
+            "_data": null
+          },
+          "previous": {
+            "index": 105,
+            "_data": null
+          },
+          "next": {
+            "index": 111,
+            "_data": null
+          },
+          "triangle": {
+            "index": 33,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 113,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 4,
+            "_data": null
+          },
+          "target": {
+            "index": 24,
+            "_data": null
+          },
+          "opposite": {
+            "index": 112,
+            "_data": null
+          },
+          "previous": {
+            "index": 114,
+            "_data": null
+          },
+          "next": {
+            "index": 101,
+            "_data": null
+          },
+          "triangle": {
+            "index": 34,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 103,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 3,
+            "_data": null
+          },
+          "target": {
+            "index": 24,
+            "_data": null
+          },
+          "opposite": {
+            "index": 102,
+            "_data": null
+          },
+          "previous": {
+            "index": 106,
+            "_data": null
+          },
+          "next": {
+            "index": 104,
+            "_data": null
+          },
+          "triangle": {
+            "index": 30,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 102,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 24,
+            "_data": null
+          },
+          "target": {
+            "index": 3,
+            "_data": null
+          },
+          "opposite": {
+            "index": 103,
+            "_data": null
+          },
+          "previous": {
+            "index": 100,
+            "_data": null
+          },
+          "next": {
+            "index": 99,
+            "_data": null
+          },
+          "triangle": {
+            "index": 29,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 100,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 24,
+            "_data": null
+          },
+          "target": {
+            "index": 12,
+            "_data": null
+          },
+          "opposite": {
+            "index": 101,
+            "_data": null
+          },
+          "previous": {
+            "index": 99,
+            "_data": null
+          },
+          "next": {
+            "index": 102,
+            "_data": null
+          },
+          "triangle": {
+            "index": 29,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 101,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 12,
+            "_data": null
+          },
+          "target": {
+            "index": 24,
+            "_data": null
+          },
+          "opposite": {
+            "index": 100,
+            "_data": null
+          },
+          "previous": {
+            "index": 113,
+            "_data": null
+          },
+          "next": {
+            "index": 114,
+            "_data": null
+          },
+          "triangle": {
+            "index": 34,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 34,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 4,
+              "_data": null
+            },
+            {
+              "index": 12,
+              "_data": null
+            },
+            {
+              "index": 24,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 29,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 3,
+              "_data": null
+            },
+            {
+              "index": 24,
+              "_data": null
+            },
+            {
+              "index": 24,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "source": [
+      {
+        "index": 17,
+        "_data": null
+      },
+      {
+        "coordinates": [
+          -0.75,
+          0.75,
+          -0.0
+        ],
+        "outgoing": [
+          {
+            "index": 48,
+            "_data": null
+          },
+          {
+            "index": 50,
+            "_data": null
+          },
+          {
+            "index": 116,
+            "_data": null
+          },
+          {
+            "index": 47,
+            "_data": null
+          }
+        ]
+      }
+    ],
+    "target": {
+      "index": 25,
+      "_data": null
+    },
+    "facettes": [
+      {
+        "index": 12,
+        "_data": null
+      },
+      {
+        "index": 35,
+        "_data": null
+      }
+    ],
+    "removed_edges": [
+      [
+        {
+          "index": 116,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 25,
+            "_data": null
+          },
+          "target": {
+            "index": 4,
+            "_data": null
+          },
+          "opposite": {
+            "index": 117,
+            "_data": null
+          },
+          "previous": {
+            "index": 51,
+            "_data": null
+          },
+          "next": {
+            "index": 115,
+            "_data": null
+          },
+          "triangle": {
+            "index": 35,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 117,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 4,
+            "_data": null
+          },
+          "target": {
+            "index": 25,
+            "_data": null
+          },
+          "opposite": {
+            "index": 116,
+            "_data": null
+          },
+          "previous": {
+            "index": 118,
+            "_data": null
+          },
+          "next": {
+            "index": 47,
+            "_data": null
+          },
+          "triangle": {
+            "index": 36,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 49,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 1,
+            "_data": null
+          },
+          "target": {
+            "index": 25,
+            "_data": null
+          },
+          "opposite": {
+            "index": 48,
+            "_data": null
+          },
+          "previous": {
+            "index": 52,
+            "_data": null
+          },
+          "next": {
+            "index": 50,
+            "_data": null
+          },
+          "triangle": {
+            "index": 12,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 48,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 25,
+            "_data": null
+          },
+          "target": {
+            "index": 1,
+            "_data": null
+          },
+          "opposite": {
+            "index": 49,
+            "_data": null
+          },
+          "previous": {
+            "index": 46,
+            "_data": null
+          },
+          "next": {
+            "index": 45,
+            "_data": null
+          },
+          "triangle": {
+            "index": 11,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 46,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 25,
+            "_data": null
+          },
+          "target": {
+            "index": 17,
+            "_data": null
+          },
+          "opposite": {
+            "index": 47,
+            "_data": null
+          },
+          "previous": {
+            "index": 45,
+            "_data": null
+          },
+          "next": {
+            "index": 48,
+            "_data": null
+          },
+          "triangle": {
+            "index": 11,
+            "_data": null
+          }
+        }
+      ],
+      [
+        {
+          "index": 47,
+          "_data": null
+        },
+        {
+          "source": {
+            "index": 17,
+            "_data": null
+          },
+          "target": {
+            "index": 25,
+            "_data": null
+          },
+          "opposite": {
+            "index": 46,
+            "_data": null
+          },
+          "previous": {
+            "index": 117,
+            "_data": null
+          },
+          "next": {
+            "index": 118,
+            "_data": null
+          },
+          "triangle": {
+            "index": 36,
+            "_data": null
+          }
+        }
+      ]
+    ],
+    "removed_facettes": [
+      [
+        {
+          "index": 36,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 4,
+              "_data": null
+            },
+            {
+              "index": 17,
+              "_data": null
+            },
+            {
+              "index": 25,
+              "_data": null
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "index": 11,
+          "_data": null
+        },
+        {
+          "corners": [
+            {
+              "index": 1,
+              "_data": null
+            },
+            {
+              "index": 25,
+              "_data": null
+            },
+            {
+              "index": 25,
+              "_data": null
+            }
+          ]
+        }
+      ]
+    ]
+  }
+]

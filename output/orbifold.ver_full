@@ -1,0 +1,495 @@
+[
+  [
+    {
+      "coordinates": [
+        0.0,
+        -1.0,
+        -0.0
+      ],
+      "outgoing": [
+        {
+          "index": 13,
+          "_data": null
+        },
+        {
+          "index": 5,
+          "_data": null
+        },
+        {
+          "index": 29,
+          "_data": null
+        },
+        {
+          "index": 21,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        -0.0,
+        1.0,
+        0.0
+      ],
+      "outgoing": [
+        {
+          "index": 37,
+          "_data": null
+        },
+        {
+          "index": 61,
+          "_data": null
+        },
+        {
+          "index": 57,
+          "_data": null
+        },
+        {
+          "index": 53,
+          "_data": null
+        },
+        {
+          "index": 45,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "outgoing": [
+        {
+          "index": 75,
+          "_data": null
+        },
+        {
+          "index": 67,
+          "_data": null
+        },
+        {
+          "index": 87,
+          "_data": null
+        },
+        {
+          "index": 79,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        -0.0,
+        0.0,
+        1.0
+      ],
+      "outgoing": [
+        {
+          "index": 97,
+          "_data": null
+        },
+        {
+          "index": 95,
+          "_data": null
+        },
+        {
+          "index": 91,
+          "_data": null
+        },
+        {
+          "index": 107,
+          "_data": null
+        },
+        {
+          "index": 99,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        -1.0,
+        0.0,
+        -0.0
+      ],
+      "outgoing": [
+        {
+          "index": 115,
+          "_data": null
+        },
+        {
+          "index": 111,
+          "_data": null
+        },
+        {
+          "index": 127,
+          "_data": null
+        },
+        {
+          "index": 123,
+          "_data": null
+        },
+        {
+          "index": 119,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "outgoing": [
+        {
+          "index": 143,
+          "_data": null
+        },
+        {
+          "index": 141,
+          "_data": null
+        },
+        {
+          "index": 139,
+          "_data": null
+        },
+        {
+          "index": 135,
+          "_data": null
+        },
+        {
+          "index": 131,
+          "_data": null
+        }
+      ]
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "coordinates": [
+        -0.75,
+        0.0,
+        -0.75
+      ],
+      "outgoing": [
+        {
+          "index": 122,
+          "_data": null
+        },
+        {
+          "index": 124,
+          "_data": null
+        },
+        {
+          "index": 140,
+          "_data": null
+        },
+        {
+          "index": 121,
+          "_data": null
+        }
+      ]
+    },
+    null,
+    null,
+    {
+      "coordinates": [
+        -0.0,
+        0.75,
+        0.75
+      ],
+      "outgoing": [
+        {
+          "index": 56,
+          "_data": null
+        },
+        {
+          "index": 58,
+          "_data": null
+        },
+        {
+          "index": 96,
+          "_data": null
+        },
+        {
+          "index": 55,
+          "_data": null
+        }
+      ]
+    },
+    null,
+    {
+      "coordinates": [
+        0.5555559992790222,
+        -0.5555559992790222,
+        -0.5555559992790222
+      ],
+      "outgoing": [
+        {
+          "index": 72,
+          "_data": null
+        },
+        {
+          "index": 134,
+          "_data": null
+        },
+        {
+          "index": 31,
+          "_data": null
+        },
+        {
+          "index": 4,
+          "_data": null
+        },
+        {
+          "index": 10,
+          "_data": null
+        },
+        {
+          "index": 66,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        0.555554986000061,
+        -0.5555559992790222,
+        0.5555559992790222
+      ],
+      "outgoing": [
+        {
+          "index": 18,
+          "_data": null
+        },
+        {
+          "index": 90,
+          "_data": null
+        },
+        {
+          "index": 85,
+          "_data": null
+        },
+        {
+          "index": 86,
+          "_data": null
+        },
+        {
+          "index": 11,
+          "_data": null
+        },
+        {
+          "index": 12,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        -0.5555559992790222,
+        -0.5555559992790222,
+        0.555554986000061
+      ],
+      "outgoing": [
+        {
+          "index": 26,
+          "_data": null
+        },
+        {
+          "index": 110,
+          "_data": null
+        },
+        {
+          "index": 105,
+          "_data": null
+        },
+        {
+          "index": 106,
+          "_data": null
+        },
+        {
+          "index": 19,
+          "_data": null
+        },
+        {
+          "index": 20,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        -0.555554986000061,
+        -0.5555559992790222,
+        -0.5555559992790222
+      ],
+      "outgoing": [
+        {
+          "index": 28,
+          "_data": null
+        },
+        {
+          "index": 30,
+          "_data": null
+        },
+        {
+          "index": 138,
+          "_data": null
+        },
+        {
+          "index": 125,
+          "_data": null
+        },
+        {
+          "index": 126,
+          "_data": null
+        },
+        {
+          "index": 27,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        0.5555559992790222,
+        0.5555559992790222,
+        -0.555554986000061
+      ],
+      "outgoing": [
+        {
+          "index": 42,
+          "_data": null
+        },
+        {
+          "index": 130,
+          "_data": null
+        },
+        {
+          "index": 73,
+          "_data": null
+        },
+        {
+          "index": 74,
+          "_data": null
+        },
+        {
+          "index": 35,
+          "_data": null
+        },
+        {
+          "index": 36,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        0.555554986000061,
+        0.5555559992790222,
+        0.5555559992790222
+      ],
+      "outgoing": [
+        {
+          "index": 84,
+          "_data": null
+        },
+        {
+          "index": 94,
+          "_data": null
+        },
+        {
+          "index": 59,
+          "_data": null
+        },
+        {
+          "index": 60,
+          "_data": null
+        },
+        {
+          "index": 34,
+          "_data": null
+        },
+        {
+          "index": 78,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        -0.5555559992790222,
+        0.5555559992790222,
+        0.5555559992790222
+      ],
+      "outgoing": [
+        {
+          "index": 104,
+          "_data": null
+        },
+        {
+          "index": 114,
+          "_data": null
+        },
+        {
+          "index": 51,
+          "_data": null
+        },
+        {
+          "index": 52,
+          "_data": null
+        },
+        {
+          "index": 54,
+          "_data": null
+        },
+        {
+          "index": 98,
+          "_data": null
+        }
+      ]
+    },
+    {
+      "coordinates": [
+        -0.5555559992790222,
+        0.5555559992790222,
+        -0.5555559992790222
+      ],
+      "outgoing": [
+        {
+          "index": 50,
+          "_data": null
+        },
+        {
+          "index": 118,
+          "_data": null
+        },
+        {
+          "index": 120,
+          "_data": null
+        },
+        {
+          "index": 142,
+          "_data": null
+        },
+        {
+          "index": 43,
+          "_data": null
+        },
+        {
+          "index": 44,
+          "_data": null
+        }
+      ]
+    }
+  ],
+  null
+]
