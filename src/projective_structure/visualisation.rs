@@ -17,8 +17,8 @@ impl<'p, TM: UncontractableMesh> ProjectiveStructureVisualisation<'p, TM> {
     pub fn new(structure: &'p ProjectiveStructure<TM>) -> Self {
         let corners = structure.current_triangles()[0].1.corners;
         Self { 
-            // base: corners.map(|i| (i, structure[i].as_ref().unwrap().coordinates)),
-            base: [(corners[0], [1f64, 0f64, 0f64].into()), (corners[1], [1f64, 1f64, 1f64].into()), (corners[2], [0f64, 0f64, 1f64].into())],
+            base: corners.map(|i| (i, structure[i].as_ref().unwrap().coordinates)),
+            // base: [(corners[0], [1f64, 0f64, 0f64].into()), (corners[1], [1f64, 1f64, 1f64].into()), (corners[2], [0f64, 0f64, 1f64].into())],
             structure,
         }
     }
@@ -126,7 +126,7 @@ impl<'p, TM: UncontractableMesh> VisualiseProjectiveStructure for ProjectiveStru
             .unzip();
         let triangles = triangles
             .into_iter()
-            .map(|it| (it, [rand::random(), rand::random(), rand::random(), 128])).collect();
+            .map(|it| (it, [rand::random(), rand::random(), rand::random(), 255])).collect();
         MeshTriangleInfo {
             triangles,
             nodes,
@@ -141,83 +141,6 @@ pub trait VisualiseProjectiveStructure {
 impl<'M, TD: MeshData, TM: TriangleMesh<Data = TD>> VisualiseProjectiveStructure for CEquations<'M, TM> {
     fn visualise(&self) -> MeshTriangleInfo {
         let mut triangles = List::<[(Index<Node>, Vector3<f64>); 3], Triangle>::with_defaults(self.mesh.triangles().len());
-
-        // let triangle = self.mesh.current_triangles()[0].clone();
-        // triangles[triangle.0] = Some(triangle.1.corners.map(|it| (it, self.mesh[it].as_ref().unwrap().coordinates.into())));
-        // // let triangles = generate_triangles(self, triangle.0, triangles);
-
-        // let init = self.mesh.current_triangles()[0].clone();
-        // let mut init_edge = self.mesh.find_edge(init.1.corners[0], init.1.corners[1]).unwrap().apply(|it| (it, self.mesh[it].as_ref().unwrap()));
-        // // let triangles: List<[(Index<Node>, Vector3<f64>); 3], Triangle> = List::with_defaults(self.mesh.triangles().len()).also(|it| it[triangle.0] = Some(triangle.1.corners.map(|it| (it, self.mesh[it].as_ref().unwrap().coordinates.into()))));
-        // let mut triangles: Vec<[(Index<Node>, Vector3<f64>); 3]> = vec![triangle.1.corners.map(|it| (it, self.mesh[it].as_ref().unwrap().coordinates.into()))];
-
-        
-        // let mut queue: VecDeque<(usize, Index<Edge>)> = VecDeque::new();
-        // queue.push_back((0, init_edge.0));
-        
-        // while let Some((init_triangle, idx_edge)) = queue.pop_front() {
-        //     let mut prev_triangle = &triangles[init_triangle];
-        //     let mut prev_triangle_index = init_triangle;
-        //     let mut curr_edge = idx_edge;
-        //     loop {
-        //         let edge = self.mesh[curr_edge].as_ref().unwrap();
-
-        //         let s = prev_triangle.iter().find(|it| it.0 == edge.source).unwrap().1;
-        //         let t = prev_triangle.iter().find(|it| it.0 == edge.target).unwrap().1;
-        //         let opp = prev_triangle.iter().find(|it| it.0 != edge.source && it.0 != edge.target).unwrap().1;
-        //         let [a,b,c] = &self.parameters.coefficients[self.find_mapping(curr_edge)].data.0[0][0..3] else { panic!() };
-        //         let d = *a * s + *b * opp + *c * t;
-                
-        //         if triangles.len() < self.mesh.current_triangles().len() {
-        //             queue.push_back((prev_triangle_index, edge.next));
-        //         }
-
-        //         let next_edge = self.mesh[edge.opposite].as_ref().unwrap().next;
-        //         triangles.push([(edge.source, s), (edge.target, t), (self.mesh[next_edge].as_ref().unwrap().target, d)]);
-
-        //         if next_edge == idx_edge {
-        //             break;
-        //         }
-        //         prev_triangle = triangles.last().unwrap();
-        //         prev_triangle_index = triangles.len() - 1;
-        //         curr_edge = next_edge;
-
-        //     }
-        // }
-        
-
-        // fn generate_triangles<'M, TD: MeshData, TM: TriangleMesh<Data = TD>>(equations: &'M CEquations<'M, TM>, triangle: Index<Triangle>, mut triangles: List<[(Index<Node>, Vector3<f64>); 3], Triangle>) -> List<[(Index<Node>, Vector3<f64>); 3], Triangle> {
-        //     let [a, b, c] = triangles[triangle].as_ref().unwrap().map(|(i, n)| (i, n));
-            
-        //     let (index, edge) = equations.mesh.find_edge(a.0, b.0).unwrap().apply(|it| (it, equations.mesh[it].as_ref().unwrap()));
-        //     let mut next_triangles = Vec::with_capacity(3);
-        //     for (index, (idx_s, s), (idx_t, t), (idx_o, o)) in [(index, a, b, c), (edge.next, b, c, a), (edge.previous, c, a, b)] {
-        //         let edge = equations.mesh[index].as_ref().unwrap();
-        //         let idx_d = equations.mesh[edge.opposite].as_ref().unwrap().apply(|opp| equations.mesh[opp.next].as_ref().unwrap().target);
-        //         let opp = equations.mesh[edge.opposite].as_ref().unwrap().triangle; 
-        //         if triangles[opp].is_some() {
-        //             continue;
-        //         }
-        //         let mapping = equations.find_mapping(index);
-        //         let coefficients = equations.parameters.coefficients[mapping].fixed_rows::<3>(0);
-        //         // let matrix = SMatrix::<f64, 3, 3>::zeros().also(|it| {
-        //         //     // it.view_mut((0,0), (1,3)).set_row(0, &RowVector3::from_element(1f64));
-        //         //     it.view_mut((0,0), (3,1)).set_column(0, &Vector3::from_column_slice((&s).into()));
-        //         //     it.view_mut((0,1), (3,1)).set_column(0, &Vector3::from_column_slice((&o).into()));
-        //         //     it.view_mut((0,2), (3,1)).set_column(0, &Vector3::from_column_slice((&t).into()));
-        //         // });
-        //         let matrix = Matrix3::from_iterator(s.into_iter().chain(o.into_iter()).chain(t.into_iter()).cloned());
-        //         let d = matrix * coefficients;
-        //         triangles[opp] = Some([(idx_s, s), (idx_d, d), (idx_t, t)]);
-        //         next_triangles.push(opp);
-        //     }
-
-        //     for triangle in next_triangles {
-        //         triangles = generate_triangles(equations, triangle, triangles);
-        //     }
-        //     triangles
-        // }
-
 
         fn generate_triangles<'M, TD: MeshData, TM: TriangleMesh<Data = TD>>(equations: &'M CEquations<'M, TM>, triangle: Index<Triangle>, mut triangles: List<[(Index<Node>, Vector3<f64>); 3], Triangle>) -> List<[(Index<Node>, Vector3<f64>); 3], Triangle> {
             let [a, b, c] = triangles[triangle].as_ref().unwrap().map(|(i, n)| (i, n));
@@ -338,49 +261,6 @@ impl<TM: TriangleMesh> VisualiseProjectiveStructure for (&TM, List<SVector<f64, 
     fn visualise(&self) -> MeshTriangleInfo {
         let (mesh, coefficients) = self;
         let mut triangles = List::<[(Index<Node>, Vector3<f64>); 3], Triangle>::with_defaults(mesh.triangles().len());
-
-        // let triangle = mesh.current_triangles()[0].clone();
-        // triangles[triangle.0] = Some(triangle.1.corners.map(|it| (it, mesh[it].as_ref().unwrap().coordinates.into())));
-        // // let triangles = generate_triangles(self, triangle.0, triangles);
-
-        // let init = mesh.current_triangles()[0].clone();
-        // let mut init_edge = mesh.find_edge(init.1.corners[0], init.1.corners[1]).unwrap().apply(|it| (it, mesh[it].as_ref().unwrap()));
-        // // let triangles: List<[(Index<Node>, Vector3<f64>); 3], Triangle> = List::with_defaults(self.mesh.triangles().len()).also(|it| it[triangle.0] = Some(triangle.1.corners.map(|it| (it, self.mesh[it].as_ref().unwrap().coordinates.into()))));
-        // let mut triangles: Vec<[(Index<Node>, Vector3<f64>); 3]> = vec![triangle.1.corners.map(|it| (it, mesh[it].as_ref().unwrap().coordinates.into()))];
-
-        
-        // let mut queue: VecDeque<(usize, Index<Edge>)> = VecDeque::new();
-        // queue.push_back((0, init_edge.0));
-        
-        // while let Some((init_triangle, idx_edge)) = queue.pop_front() {
-        //     let mut prev_triangle = &triangles[init_triangle];
-        //     let mut prev_triangle_index = init_triangle;
-        //     let mut curr_edge = idx_edge;
-        //     loop {
-        //         let edge = mesh[curr_edge].as_ref().unwrap();
-
-        //         let s = prev_triangle.iter().find(|it| it.0 == edge.source).unwrap().1;
-        //         let t = prev_triangle.iter().find(|it| it.0 == edge.target).unwrap().1;
-        //         let opp = prev_triangle.iter().find(|it| it.0 != edge.source && it.0 != edge.target).unwrap().1;
-        //         let [a,b,c] = &coefficients[curr_edge].as_ref().unwrap().data.0[0][0..3] else { panic!() };
-        //         let d = *a * s + *b * opp + *c * t;
-                
-        //         if triangles.len() < mesh.current_triangles().len() {
-        //             queue.push_back((prev_triangle_index, edge.next));
-        //         }
-
-        //         let next_edge = mesh[edge.opposite].as_ref().unwrap().next;
-        //         triangles.push([(edge.source, s), (edge.target, t), (mesh[next_edge].as_ref().unwrap().target, d)]);
-
-        //         if next_edge == idx_edge {
-        //             break;
-        //         }
-        //         prev_triangle = triangles.last().unwrap();
-        //         prev_triangle_index = triangles.len() - 1;
-        //         curr_edge = next_edge;
-
-        //     }
-        // }
 
         fn generate_triangles<TM: TriangleMesh>(mesh: &TM, coefficients: &List<SVector<f64, 4>, Edge>, triangle: Index<Triangle>, mut triangles: List<[(Index<Node>, Vector3<f64>); 3], Triangle>) -> List<[(Index<Node>, Vector3<f64>); 3], Triangle> {
             let [a, b, c] = triangles[triangle].as_ref().unwrap().map(|(i, n)| (i, n));

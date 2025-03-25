@@ -90,9 +90,9 @@ impl<TD: MeshData> ContractionOrder for (&ClosedTriangleMesh<TD>, Index<Edge>) {
             .map(|edge| { println!("dihedral_angle: {}", (&contracted_mesh, edge).dihedral_angle().to_degrees()); edge })
             .map(|edge| (&contracted_mesh, edge).dihedral_angle().to_degrees() < 45f64)
             .any(|contractable| contractable);
-        if uncontractable {
-            return None;
-        }
+        // if uncontractable {
+        //     return None;
+        // }
         let order = mesh[s].as_ref().unwrap().outgoing.iter()
             .filter_map(|edge| {
                 contracted_mesh[*edge]

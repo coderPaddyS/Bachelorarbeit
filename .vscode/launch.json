@@ -9,7 +9,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceRoot}/target/debug/ba",
-            "args": [],
+            "args": ["--nocapture", "--", "--show-output"],
             "cwd": "${workspaceRoot}",
         }
     ]

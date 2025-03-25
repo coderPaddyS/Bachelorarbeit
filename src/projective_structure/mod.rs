@@ -955,9 +955,9 @@ impl<'M, TM: TriangleMesh<Data = SubdividedTriangleData>> LeastSquaresProblem<f6
 mod tests {
     use approx::assert_relative_eq;
 
-    use crate::mesh::{FromMeshBuilder, MeshBuilder, UnfinishedNode};
+    use crate::mesh::{ContractableMesh, FromMeshBuilder, MeshBuilder, UncontractableMesh, UnfinishedNode};
 
-    use super::*;
+    use super::{structure::ProjectiveStructure, *};
 
     fn tetraeder() -> ClosedTriangleMesh {
         let mut builder = MeshBuilder::default();
@@ -1202,7 +1202,7 @@ mod tests {
         pretty_env_logger::init();
         let mesh = tetraeder();
         let mut submesh = mesh.subdivide();
-        let structure = submesh.calculate_projective_structure(1e-12, 100, 1, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        let structure = submesh.calculate_projective_structure(1e-14, 100, 1, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
         for (index, edge) in structure.mesh.current_edges_undirected() {
             let matrix = structure.point_weight_matrix_of_edge(index, &edge);
             let coefficients = structure.parameters.coefficients[structure.find_mapping(index)];
@@ -1221,7 +1221,7 @@ mod tests {
         pretty_env_logger::init();
         let mesh = cube();
         let mut submesh = mesh.subdivide();
-        let structure = submesh.calculate_projective_structure(1e-15, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        let structure = submesh.calculate_projective_structure(1e-12, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
         for (index, edge) in structure.mesh.current_edges_undirected() {
             let matrix = structure.point_weight_matrix_of_edge(index, &edge);
             let coefficients = structure.parameters.coefficients[structure.find_mapping(index)];
@@ -1240,7 +1240,7 @@ mod tests {
         pretty_env_logger::init();
         let mesh = cube();
         let mut submesh = mesh.subdivide();
-        let structure = submesh.calculate_projective_structure(1e-14, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        let structure = submesh.calculate_projective_structure(1e-9, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
         // let circle = structure.mesh.collect_outgoing_edges(mesh.nodes[0]);
         // let mut x = structure.mesh[circle[0]].as_ref().unwrap().previous.apply(|it| structure.mesh[it].as_ref.unwrap().source).apply(|it| structure.mesh[it].as_ref().unwrap().coordinates);
         // let r = x.clone();
@@ -1260,11 +1260,27 @@ mod tests {
         pretty_env_logger::init();
         let mesh = icosahedron();
         let mut submesh = mesh.subdivide();
-        let structure = submesh.calculate_projective_structure(1e-14, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        let structure = submesh.calculate_projective_structure(1e-9, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
         for (index, edge) in structure.mesh.current_edges_undirected() {
             let matrix = structure.point_weight_matrix_of_edge(index, &edge);
             let coefficients = structure.parameters.coefficients[structure.find_mapping(index)];
             assert_relative_eq!(SVector::zeros(), matrix * coefficients, epsilon = 1e-12)
+        }
+    }
+
+    #[test]
+    pub fn icosahedron_projective_structure_hec() {
+        pretty_env_logger::init();
+        let contractions = 2;
+        let mesh = icosahedron();
+        let mut submesh = mesh.subdivide();
+        for _ in 0..contractions {
+            submesh.contract_next_edge();
+        }
+        let structure = submesh.calculate_projective_structure(1e-9, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        let mut structure = ProjectiveStructure::new(structure);
+        for _ in 0..contractions {
+            structure.uncontract_next_edge(|_,_| {});
         }
     }
 }

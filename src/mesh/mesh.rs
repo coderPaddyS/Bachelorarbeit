@@ -99,7 +99,7 @@ pub trait TriangleMesh:
                 match tri {
                     None => None,
                     Some(tri) => {
-                        let color: [u8; 4] = [rand::random(), rand::random(), rand::random(), 128];
+                        let color: [u8; 4] = [rand::random(), rand::random(), rand::random(), 255];
                         let nodes: Vec<_> = tri.corners.iter().map(|idx| self[*idx].as_ref().unwrap().coordinates.clone()).collect();
                         // let normal = (Vector3::from(nodes[1]) - Vector3::from(nodes[0])).cross(&(Vector3::from(nodes[2]) - Vector3::from(nodes[0])));
 

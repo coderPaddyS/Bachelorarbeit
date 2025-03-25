@@ -74,13 +74,28 @@ impl DerefMut for OrbifoldMesh {
     }
 }
 
+const palette: [[u8; 3]; 10] =[
+    [255, 190, 11,],
+    [253, 138, 9,],
+    [251, 86, 7,],
+    [253, 43, 59,],
+    [255, 0, 110,],
+    [224, 14, 142,],
+    [193, 28, 173,],
+    [131, 56, 236,],
+    [95, 95, 246,],
+    [58, 134, 255,],
+];
+
 impl OrbifoldMesh {
     pub fn build_mesh(&self) -> bevy::prelude::Mesh {
         // let MeshTriangleInfo { triangles, nodes } = self.0.clone().subdivide().build_mesh();
         let MeshTriangleInfo { triangles, nodes } = self.0.build_mesh();
         // println!("{:?}", self.0.contraction_order);
         // let MeshTriangleInfo { triangles, nodes } = self.0.clone().build_mesh();
-        let (indices, colors): (Vec<u32>, Vec<Vec4>) = triangles.into_iter().map(|(i, [r,g,b,a])| (i as u32, Color::srgba_u8(r,g,b,a).to_srgba().to_vec4())).unzip();
+        let (indices, colors): (Vec<u32>, Vec<Vec4>) = triangles.into_iter()
+            .map(|(i, [r,g,b,a])| (i, palette[((r + g + b) % 10) as usize]))
+            .map(|(i, [r,g,b])| (i as u32, Color::srgba_u8(r,g,b,255).to_srgba().to_vec4())).unzip();
 
         bevy::prelude::Mesh::new(
                 bevy::render::mesh::PrimitiveTopology::TriangleList,
@@ -231,6 +246,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin)
+        .insert_resource(ClearColor(Color::rgba(0.8, 0.8, 0.8, 0.8)))
         .add_systems(Startup, setup)
         .add_systems(Update,  FileDialog::openMesh())
         .add_systems(Update, (input_handler, mouse_rotation, move_camera, collapse_edge))
@@ -473,7 +489,7 @@ fn setup(
     let mesh = OrbifoldMesh(InnerType::Mesh(ClosedTriangleMesh::build(builder).unwrap()));
 
     let debug_material = materials.add(StandardMaterial {
-        base_color_texture: Some(images.add(uv_debug_texture())),
+        base_color: Color::WHITE,
         cull_mode: None,
         ..default()
     });
@@ -485,9 +501,10 @@ fn setup(
     ));
 
     let camera_and_light_transform = Transform::from_xyz(3.8, 3.8, 3.8).looking_at(Vec3::ZERO, Vec3::Y);
+    let light = Transform::from_xyz(0f32, 0f32, 0f32);
     // let (yaw, pitch, _) = camera_and_light_transform.rotation.to_euler(EulerRot::XYZ);
     commands.spawn((Camera3d::default(), camera_and_light_transform, CameraRotation { yaw: 0.0, pitch: 0. }));
-    commands.spawn((PointLight::default(), camera_and_light_transform));
+    commands.spawn((PointLight { intensity: 100000f32, ..Default::default() }, light));
 
     // window.cursor_options.grab_mode = CursorGrabMode::Locked; 
     // window.cursor_options.visible = false;
@@ -496,7 +513,7 @@ fn setup(
 fn uv_debug_texture() -> Image {
     const TEXTURE_SIZE: usize = 8;
 
-    let mut palette: [u8; 32] = [
+    let mut _palette: [u8; 32] = [
         255, 102, 159, 255, 255, 159, 102, 255, 236, 255, 102, 255, 121, 255, 102, 255, 102, 255,
         198, 255, 102, 198, 255, 255, 121, 102, 255, 255, 236, 102, 255, 255,
     ];
@@ -504,8 +521,8 @@ fn uv_debug_texture() -> Image {
     let mut texture_data = [0; TEXTURE_SIZE * TEXTURE_SIZE * 4];
     for y in 0..TEXTURE_SIZE {
         let offset = TEXTURE_SIZE * y * 4;
-        texture_data[offset..(offset + TEXTURE_SIZE * 4)].copy_from_slice(&palette);
-        palette.rotate_right(4);
+        texture_data[offset..(offset + TEXTURE_SIZE * 4)].copy_from_slice(&_palette);
+        _palette.rotate_right(4);
     }
 
     Image::new_fill(
