@@ -3,6 +3,14 @@ name = "ba"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["stepsize", "init_only_inter"]
+stepsize = []
+init_only_quads = []
+init_only_inter = []
+init_inter_quad = []
+rescale = []
+
 [dependencies]
 apply = "0.3.0"
 # bevy = { version = "0.14.2", features = ["dynamic_linking"] }

@@ -4,14 +4,13 @@ use apply::{Also, Apply};
 use itertools::Itertools;
 use nalgebra::{Const, DMatrix, DVector, Dyn, Matrix3, Matrix4, Matrix4x3, SMatrix, SVector, Vector, Vector3, Vector4};
 
-use crate::{mesh::{UncontractableMesh, Edge, Index, List, MeshCollapseInfo, MeshData, Node, Triangle, TriangleMesh}, ClosedTriangleMesh};
+use crate::{mesh::{Edge, Index, List, MeshCollapseInfo, MeshData, Node, Triangle, TriangleMesh, TriangleMeshHalfEdgeCollapse, UncontractableMesh}, ClosedTriangleMesh};
 
-use super::{visualisation::VisualiseProjectiveStructure, CEquationParameters, CEquations, Quad};
+use super::{visualisation::{ProjectiveStructureVisualisation, VisualiseProjectiveStructure}, CEquationParameters, CEquations, Quad};
 
 #[derive(Clone)]
 pub struct ProjectiveStructure<TM: UncontractableMesh> {
     mesh: TM,
-    nodes: List<Node>,
     pub coefficients: List<SVector<f64, 4>, Edge>
 }
 
@@ -19,13 +18,7 @@ impl<'M, TM: UncontractableMesh + 'M> core::ops::Index<Index<Node>> for Projecti
     type Output = <List<Node> as core::ops::Index<Index<Node>>>::Output;
 
     fn index(&self, index: Index<Node>) -> &Self::Output {
-        &self.nodes[index]
-    }
-}
-
-impl<'M, TM: UncontractableMesh + 'M> core::ops::IndexMut<Index<Node>> for ProjectiveStructure<TM> {
-    fn index_mut(&mut self, index: Index<Node>) -> &mut Self::Output {
-        &mut self.nodes[index]
+        &self.mesh[index]
     }
 }
 
@@ -49,11 +42,11 @@ impl<'M, TM: UncontractableMesh + 'M> TriangleMesh for ProjectiveStructure<TM> {
     type Data = <TM as TriangleMesh>::Data;
 
     fn nodes(&self) -> &List<Node> {
-        &self.nodes
+        &self.mesh.nodes()
     }
 
     fn current_nodes(&self) -> Vec<(Index<Node>, Node)> {
-        self.mesh.current_nodes().into_iter().map(|(index, _)| (index, self[index].as_ref().unwrap().clone())).collect_vec()
+        self.mesh.current_nodes()
     }
 
     fn edges(&self) -> &List<Edge> {
@@ -81,7 +74,89 @@ impl<'M, TM: UncontractableMesh + 'M> TriangleMesh for ProjectiveStructure<TM> {
     }
 
     fn build_mesh(&self) -> crate::mesh::MeshTriangleInfo {
-        Self::visualise_coefficients(&self)
+        ProjectiveStructureVisualisation::new(self).visualise()
+    }
+}
+
+impl<'M, TM: UncontractableMesh + 'M> ProjectiveStructure<TM> {
+    fn projective_neighbourhood_with(mesh: &TM, coefficients: &List<Vector4<f64>, Edge>, index: Index<Triangle>, base: [[f64; 3]; 3]) -> List<[f64; 3], Node> {
+        let mut nodes = List::with_defaults(mesh.nodes().len());
+
+        let triangle = mesh[index].as_ref().unwrap().corners;
+        for (i, c) in [0, 1, 2].map(|i| (triangle[i], base[i])) {
+            nodes[i] = Some(c)
+        }
+        // for (a,b) in [(triangle[0], triangle[1]), (triangle[1], triangle[2]), (triangle[2], triangle[1])] {
+        //     let st = mesh.find_edge(a, b).unwrap();
+        //     let mut index = st;
+
+        //     for edge in Self::collect_outgoing_edges_starting_with_using(mesh.edges(), st) {
+        //         let opposite = mesh[edge].as_ref().unwrap().opposite;
+        //         let next = mesh[opposite].as_ref().unwrap().next;
+        //         let d = mesh[next].as_ref().unwrap().target;
+        //         if nodes[d].is_none() {
+        //             nodes[d] = Some(Self::calculate_opposite_with(mesh, &nodes, coefficients, index))
+        //         }
+        //     }
+        // }
+
+        // Calculate the coordinates of a neighbourhood around the source triangle
+        for (a,b) in [(triangle[0], triangle[1]), (triangle[1], triangle[2]), (triangle[2], triangle[1])] {
+            let st = mesh.find_edge(a, b).unwrap();
+            let mut index = st;
+
+            loop {
+                let opposite = mesh[index].as_ref().unwrap().opposite;
+                let (next, prev) = mesh[opposite].as_ref().unwrap().apply(|edge| (edge.next, edge.previous));
+                let d = mesh[next].as_ref().unwrap().target;
+                if nodes[d].is_none() {
+                    nodes[d] = Some(Self::calculate_opposite_with(mesh, &nodes, coefficients, index))
+                }
+                let d = mesh[prev].as_ref().unwrap().opposite
+                    .apply(|edge| mesh[edge].as_ref().unwrap().next)
+                    .apply(|edge| mesh[edge].as_ref().unwrap().target);
+                if nodes[d].is_none() {
+                    nodes[d] = Some(Self::calculate_opposite_with(mesh, &nodes, coefficients, prev))
+                }
+                index = next;
+    
+                if index == st {
+                    break;
+                }
+            }
+        }
+
+        nodes
+    }
+    fn projective_neighbourhood(&self, index: Index<Triangle>, base: [[f64; 3]; 3]) -> List<[f64; 3], Node> {
+        let mut nodes = List::with_defaults(self.mesh.nodes().len());
+
+        let triangle = self.mesh[index].as_ref().unwrap().corners;
+        for (i, c) in [0, 1, 2].map(|i| (triangle[i], base[i])) {
+            nodes[i] = Some(c)
+        }
+
+        // Calculate the coordinates of a neighbourhood around the source triangle
+        for (a,b) in [(triangle[0], triangle[1]), (triangle[1], triangle[2]), (triangle[2], triangle[1])] {
+            let st = self.mesh.find_edge(a, b).unwrap();
+            let mut index = st;
+
+            loop {
+                let opposite = self.mesh[index].as_ref().unwrap().opposite;
+                let next = self.mesh[opposite].as_ref().unwrap().next;
+                let d = self.mesh[next].as_ref().unwrap().target;
+                if nodes[d].is_none() {
+                    nodes[d] = Some(self.calculate_opposite(index))
+                }
+                index = next;
+    
+                if index == st {
+                    break;
+                }
+            }
+        }
+
+        nodes
     }
 }
 
@@ -97,8 +172,11 @@ impl<'M, TM: UncontractableMesh + 'M> UncontractableMesh for ProjectiveStructure
         let (a, c, prev) = self.mesh[edge].as_ref().unwrap().apply(|it| (it.source, it.target, it.previous));
         let b = self.mesh[prev].as_ref().unwrap().source;
         let bar = ProjectiveStructure::<TM>::barycentric_coordinates_orig(&self.mesh, edge, source.1.coordinates);
-        let translated_source: Vector3<f64> = self.from_barycentric(bar, [a,b,c]).apply(|coordinates| {
-            self.nodes[source.0] = Some(Node { coordinates, outgoing: source.1.outgoing });
+
+        let mut nodes = self.projective_neighbourhood(triangle, [a,b,c].map(|c| self.mesh[c].as_ref().unwrap().coordinates));
+
+        let translated_source: Vector3<f64> = self.from_barycentric(bar, [a,b,c], &nodes).apply(|coordinates| {
+            nodes[source.0] = Some(coordinates);
             coordinates.into()
         });
 
@@ -116,11 +194,11 @@ impl<'M, TM: UncontractableMesh + 'M> UncontractableMesh for ProjectiveStructure
 
         loop {
             let (next, opposite) = self.mesh[index].as_ref().unwrap().apply(|edge| (edge.next, edge.opposite));
-            self.recalculate_coefficients(self.mesh[next].as_ref().unwrap().opposite, &translated_source);
+            self.recalculate_coefficients(self.mesh[next].as_ref().unwrap().opposite, &translated_source, &nodes);
 
             let _index = self.mesh[opposite].as_ref().unwrap().next;
-            let d = self.nodes[self.mesh[_index].as_ref().unwrap().target].as_ref().unwrap();
-            self.recalculate_coefficients(index, &d.coordinates.into());
+            let d = nodes[self.mesh[_index].as_ref().unwrap().target].as_ref().unwrap();
+            self.recalculate_coefficients(index, &(*d).into(), &nodes);
 
             index = _index;
 
@@ -136,34 +214,43 @@ impl<'M, TM: UncontractableMesh + 'M> UncontractableMesh for ProjectiveStructure
         let mut bar= None;
         let mut edge = None;
         let mut basis = None;
+        let mut nodes = None;
+        let mut base= None;
+        let coefficients = self.coefficients.clone();
+        // let base = [[1f64, 0f64, 0f64], [0f64, 1f64, 0f64], [0f64, 0f64, 1f64]];
 
         self.mesh.uncontract_next_edge(|mesh, contraction| {
             let _source = contraction.source();
             let _target = contraction.target();
              
-            let triangle = ProjectiveStructure::<TM>::find_triangle(mesh, _source.1.coordinates, _target).unwrap();
-            let [a,b,c] = mesh[triangle].as_ref().unwrap().corners.map(|c| (c, mesh[c].as_ref().unwrap().coordinates));
+            let _triangle = ProjectiveStructure::<TM>::find_triangle(mesh, _source.1.coordinates, _target).unwrap();
+            let [a,b,c] = mesh[_triangle].as_ref().unwrap().corners.map(|c| (c, mesh[c].as_ref().unwrap().coordinates));
             let _edge = mesh.find_edge(a.0, b.0).unwrap();
 
             let (a, c, prev) = mesh[_edge].as_ref().unwrap().apply(|it| (it.source, it.target, it.previous));
             let b = mesh[prev].as_ref().unwrap().source;
             basis = Some([a, b, c]);
+            base = Some([a,b,c].map(|i| mesh[i].as_ref().unwrap().coordinates));
             println!("b: {b}");
             println!("b: {:?}", mesh[b].as_ref().unwrap().coordinates);
+            let _nodes = Self::projective_neighbourhood_with(mesh, &coefficients,_triangle, base.clone().unwrap());
+            nodes = Some(_nodes);
             bar = Some(ProjectiveStructure::<TM>::barycentric_coordinates_orig(mesh, _edge, _source.1.coordinates));
             source = Some(_source);
             target = Some(_target);
-            edge = Some(_edge)
+            edge = Some(_edge);
         });
 
         let source = source.unwrap();
         let target = target.unwrap();
         let edge = edge.unwrap();
         let bar = bar.unwrap();
+        let base = base.unwrap();
         let basis = basis.unwrap();
+        let mut nodes = nodes.unwrap();
         println!("b: {:?}", self.mesh[basis[1]].as_ref().unwrap().coordinates);
-        let translated: Vector3<f64> = self.from_barycentric(bar, basis).apply(|coordinates| {
-            self.nodes[source.0] = Some(Node { coordinates, outgoing: source.1.outgoing });
+        let translated: Vector3<f64> = self.from_barycentric_with(bar, base).apply(|coordinates| {
+            nodes[source.0] = Some(coordinates);
             coordinates.into()
         });
         println!("translated: {translated}, bar: {bar}");
@@ -180,11 +267,11 @@ impl<'M, TM: UncontractableMesh + 'M> UncontractableMesh for ProjectiveStructure
 
         loop {
             let (next, opposite) = self.mesh[index].as_ref().unwrap().apply(|edge| (edge.next, edge.opposite));
-            self.recalculate_coefficients(self.mesh[next].as_ref().unwrap().opposite, &translated);
+            self.recalculate_coefficients(self.mesh[next].as_ref().unwrap().opposite, &translated, &nodes);
 
             let _index = self.mesh[opposite].as_ref().unwrap().next;
-            let d = self.nodes[self.mesh[_index].as_ref().unwrap().target].as_ref().unwrap();
-            self.recalculate_coefficients(index, &d.coordinates.into());
+            let d = nodes[self.mesh[_index].as_ref().unwrap().target].as_ref().unwrap();
+            self.recalculate_coefficients(index, &(*d).into(), &nodes);
 
             index = _index;
 
@@ -198,49 +285,31 @@ impl<'M, TM: UncontractableMesh + 'M> UncontractableMesh for ProjectiveStructure
 impl<'M, TM: UncontractableMesh + Clone> ProjectiveStructure<TM> {
     pub fn new(equations: CEquations<'M, TM>) -> Self {
         let mut coefficients = List::with_defaults(equations.mesh.edges().len());
-        let mut nodes = List::with_defaults(equations.mesh.nodes().len());
-        let mut triangles = List::with_defaults(equations.mesh.triangles().len());
         equations.mapping
             .into_iter()
             .enumerate()
             .for_each(|(i, (edge,_))| {
                 coefficients[edge] = Some(equations.parameters.coefficients[i])
             });
-        equations.mesh.current_nodes()
-            .into_iter()
-            .for_each(|(index, node)| nodes[index] = Some(node));
-        equations.mesh.current_triangles()
-            .into_iter()
-            .for_each(|(index, triangle)| triangles[index] = Some(triangle.corners));
         Self {
             mesh: equations.mesh.clone(),
             coefficients,
-            nodes,
         }
     }
 
     pub fn replace(&mut self, parameters: CEquationParameters, mapping: &Vec<(Index<Edge>, Index<Edge>)>) {
         let mut coefficients = List::with_defaults(self.mesh.edges().len());
-        let mut nodes = List::with_defaults(self.mesh.nodes().len());
-        let mut triangles = List::with_defaults(self.mesh.triangles().len());
         mapping
             .into_iter()
             .enumerate()
             .for_each(|(i, (edge,_))| {
                 coefficients[*edge] = Some(parameters.coefficients[i])
             });
-        self.mesh.current_nodes()
-            .into_iter()
-            .for_each(|(index, node)| nodes[index] = Some(node));
-        self.mesh.current_triangles()
-            .into_iter()
-            .for_each(|(index, triangle)| triangles[index] = Some(triangle.corners));
-        self.nodes = nodes;
         self.coefficients = coefficients;
     }
 }
 
-impl ProjectiveStructure<ClosedTriangleMesh> {
+impl<TD: MeshData<CollapseInfoInput = TriangleMeshHalfEdgeCollapse, CollapseInfoOutput = TriangleMeshHalfEdgeCollapse>> ProjectiveStructure<ClosedTriangleMesh<TD>> {
     pub fn save_to_dir(self, dir: &mut PathBuf, name: &str) {
         
         let (idx_nodes, _nodes): (Vec<_>, Vec<_>) = self.mesh.nodes.enumerate_some()
@@ -449,7 +518,6 @@ impl<'M, TM: UncontractableMesh + 'M>  ProjectiveStructure<TM>{
         Self {
             mesh,
             coefficients,
-            nodes,
         }
     }
 
@@ -475,9 +543,14 @@ impl<'M, TM: UncontractableMesh + 'M>  ProjectiveStructure<TM>{
             //
             // We have a,b,c -> d given by the edge e, but we only calculated and stored the conditions for c,d,a->b.
             // TODO: Validate if calculation is true.
+            //
+            // xa + yb + zc = d <==> xa - d + zc = -yb <==> - x/y a + 1/y d - z/y c = b
+            // We now have to change the perspective, as we start with c instead of a
+            //   => We have to swap a and c as well as b and d
+            // -x/y c + 1/y b - z/y a = d <==> x/y c + d + z/y a = 1/y b <==> xc + yd + za = b 
             
             let [_a,_b,_c,_d] = self.coefficients[self.mesh[index].as_ref().unwrap().opposite].unwrap().data.0[0];
-            SVector::<f64, 4>::new(-_c/_b, _d/_b, -_a/_b,-1f64)
+            SVector::<f64, 4>::new(-_c/_b, 1f64/_b, -_a/_b, -1f64)
         });
         coefficients
     }
@@ -496,12 +569,13 @@ impl<'M, TM: UncontractableMesh + 'M>  ProjectiveStructure<TM>{
             // TODO: Validate if calculation is true.
             
             let [_a,_b,_c,_d] = coefficients[mesh[index].as_ref().unwrap().opposite].unwrap().data.0[0];
-            SVector::<f64, 4>::new(-_c/_b, 1f64/_b, -_a/_b,_d)
+            SVector::<f64, 4>::new(-_c/_b, 1f64/_b, -_a/_b, -1f64)
+            // SVector::<f64, 4>::new(-_c/_b, 1f64/_b, -_a/_b,_d)
         });
         coefficients
     }
 
-    fn calculate_opposite(&self, index: Index<Edge>) -> [f64; 3]{
+    pub fn calculate_opposite(&self, index: Index<Edge>) -> [f64; 3]{
         let edge = self.mesh[index].as_ref().unwrap();
         let (a,c) = (edge.source, edge.target);
         let b = self.mesh[edge.previous].as_ref().unwrap().source;
@@ -511,15 +585,26 @@ impl<'M, TM: UncontractableMesh + 'M>  ProjectiveStructure<TM>{
         (matrix * coefficients.fixed_rows(0)).into()
     }
 
-    fn recalculate_coefficients(&mut self, index: Index<Edge>, d: &SVector<f64, 3>) {
+    fn calculate_opposite_with(mesh: &TM, nodes: &List<[f64; 3], Node>, coefficients: &List<SVector<f64, 4>, Edge>, index: Index<Edge>) -> [f64; 3]{
+        let edge = mesh[index].as_ref().unwrap();
+        let (a,c) = (edge.source, edge.target);
+        let b = mesh[edge.previous].as_ref().unwrap().source;
+        let coefficients = Self::get_coefficients_using(&coefficients, mesh, index);
+        let columns = [a,b,c].map(|it| nodes[it].as_ref().unwrap().clone());
+        let matrix = SMatrix::<f64, 3,3>::from_column_slice(columns.as_flattened());
+        (matrix * coefficients.fixed_rows(0)).into()
+    }
+
+    fn recalculate_coefficients(&mut self, index: Index<Edge>, d: &SVector<f64, 3>, nodes: &List<[f64; 3], Node>) {
         let edge = self.mesh[index].as_ref().unwrap();
         let (a,c) = (edge.source, edge.target);
         let b = self.mesh[edge.previous].as_ref().unwrap().source;
-        let columns = [a,b,c].map(|it| self.nodes[it].as_ref().unwrap().coordinates);
+        let columns = [a,b,c].map(|it| nodes[it].as_ref().unwrap().clone());
         let matrix = SMatrix::<f64, 3,3>::from_column_slice(columns.as_flattened());
         println!("matrix: {matrix}");
         println!("d: {d}");
         let coefficients = matrix.qr().solve(d).unwrap();
+        println!("coeff: {coefficients}");
         self.coefficients[index] = Some(coefficients.insert_row(3, -1f64));
         self.coefficients[edge.opposite] = None;
     }
@@ -542,10 +627,15 @@ impl<'M, TM: UncontractableMesh + 'M>  ProjectiveStructure<TM>{
         SMatrix::<f64, 3, 3>::from_column_slice([a,b,c].map(|c| mesh[c].as_ref().unwrap().coordinates).as_flattened()).qr().solve(&x.into()).unwrap()
     }
 
-    fn from_barycentric(&self, bar: SVector<f64, 3>, [a,b,c]: [Index<Node>; 3]) -> [f64; 3] {
-        println!("basis: {}", SMatrix::<f64, 3, 3>::from_column_slice([a,b,c].map(|c| self.nodes[c].as_ref().unwrap().coordinates).as_flattened()));
-        let d = SMatrix::<f64, 3, 3>::from_column_slice([a,b,c].map(|c| self.nodes[c].as_ref().unwrap().coordinates).as_flattened()) * bar;
-        d.data.0[0]
+    fn from_barycentric_with(&self, bar: SVector<f64, 3>, base: [[f64; 3]; 3]) -> [f64; 3] {
+        let d = SMatrix::<f64, 3, 3>::from_column_slice(base.as_flattened()) * bar;
+        d.into()
+    }
+
+    fn from_barycentric(&self, bar: SVector<f64, 3>, [a,b,c]: [Index<Node>; 3], nodes: &List<[f64; 3], Node>) -> [f64; 3] {
+        println!("basis: {}", SMatrix::<f64, 3, 3>::from_column_slice([a,b,c].map(|c| nodes[c].as_ref().unwrap().clone()).as_flattened()));
+        let d = SMatrix::<f64, 3, 3>::from_column_slice([a,b,c].map(|c| nodes[c].as_ref().unwrap().clone()).as_flattened()) * bar;
+        d.into()
     }
 
     pub fn visualise_coefficients(&self) -> crate::mesh::MeshTriangleInfo {
@@ -560,9 +650,9 @@ mod tests {
 
     use apply::Apply;
     use approx::assert_relative_eq;
-    use nalgebra::{SMatrix, SVector};
+    use nalgebra::{SMatrix, SVector, Vector3};
 
-    use crate::{mesh::{ContractableMesh, FromMeshBuilder, List, MeshBuilder, TriangleMesh, UnfinishedNode}, projective_structure::{structure::ProjectiveStructure, CalculateProjectiveStructure}, ClosedTriangleMesh};
+    use crate::{mesh::{ContractableMesh, FromMeshBuilder, List, MeshBuilder, TriangleMesh, UnfinishedNode}, projective_structure::{structure::ProjectiveStructure, CalculateProjectiveStructure, CalculationProjectiveStructureStepsize, SubdiviveMesh}, ClosedTriangleMesh};
 
     fn cube() -> ClosedTriangleMesh {
         let mut builder = MeshBuilder::default();
@@ -591,6 +681,18 @@ mod tests {
             });
 
         ClosedTriangleMesh::build(builder).unwrap()
+    }
+
+    #[test]
+    fn cube_inverse_coefficient_correct() {
+        let mut mesh = cube();
+        let structure = ProjectiveStructure::new(mesh.subdivide().calculate_projective_structure(1e-12, 100, 1, CalculationProjectiveStructureStepsize::Break(0.125f64)).0);
+
+        // edge 1 has no coeffcients calculated
+        let edges = structure.edges();
+        let b = structure[edges[0.into()].as_ref().unwrap().previous.apply(|i| edges[i].as_ref().unwrap().source)].as_ref().unwrap().coordinates;
+        let s: Vector3<f64> = structure.calculate_opposite(1.into()).into();
+        assert_relative_eq!(s, b.into(), epsilon = 1e-9);
     }
 
     #[test]

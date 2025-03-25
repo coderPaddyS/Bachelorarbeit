@@ -9,7 +9,7 @@ use super::{structure::ProjectiveStructure, CEquationParameters, CEquations};
 
 pub struct ProjectiveStructureVisualisation<'p, TM: UncontractableMesh> {
     structure: &'p ProjectiveStructure<TM>,
-    base: [(Index<Node>, [f64; 3]); 3]
+    base: [(Index<Node>, [f64; 3]); 3],
 }
 
 impl<'p, TM: UncontractableMesh> ProjectiveStructureVisualisation<'p, TM> {
@@ -17,7 +17,8 @@ impl<'p, TM: UncontractableMesh> ProjectiveStructureVisualisation<'p, TM> {
     pub fn new(structure: &'p ProjectiveStructure<TM>) -> Self {
         let corners = structure.current_triangles()[0].1.corners;
         Self { 
-            base: corners.map(|i| (i, structure[i].as_ref().unwrap().coordinates)),
+            // base: corners.map(|i| (i, structure[i].as_ref().unwrap().coordinates)),
+            base: [(corners[0], [1f64, 0f64, 0f64].into()), (corners[1], [1f64, 1f64, 1f64].into()), (corners[2], [0f64, 0f64, 1f64].into())],
             structure,
         }
     }
@@ -25,51 +26,12 @@ impl<'p, TM: UncontractableMesh> ProjectiveStructureVisualisation<'p, TM> {
     fn calculate_opposite_with_coefficient(coefficients: SVector<f64, 3>, [a,b,c]: [[f64; 3]; 3]) -> SVector<f64, 3> {
         SMatrix::from_column_slice([a,b,c].as_flattened()) * coefficients
     }
-
-    fn subdivide(&self, [a,b,c]: &[(Index<Node>, Vector3<f64>); 3]) -> [(Index<Node>, Index<Node>, Vector3<f64>); 6] {
-        [
-            (a.0, b.0,  a.1 + (b.1 - a.1)/3f64),
-            (a.0, c.0,  a.1 + (c.1 - a.1)/3f64),
-            (b.0, a.0,  b.1 + (a.1 - b.1)/3f64),
-            (b.0, c.0,  b.1 + (c.1 - b.1)/3f64),
-            (c.0, a.0,  c.1 + (a.1 - c.1)/3f64),
-            (c.0, b.0,  c.1 + (b.1 - c.1)/3f64),
-        ]
-    }
-    
-    fn calculate_intersection(p0: Vector3<f64>, dir0: Vector3<f64>, p1: Vector3<f64>, dir1: Vector3<f64>) -> Option<Vector3<f64>> {
-        let d = p1 - p0;
-        let dir = dir1 - dir0;
-        let t = d[0] / dir[0];
-        return if (d[1] - t * dir[1]).abs() > 1e-9 || (d[2] - t * dir[2]).abs() > 1e-9 { 
-            None
-        } else {
-            Some(p0 + dir0 * t)
-        }
-    }
-
     fn calculate_opposite(&self, index: Index<Edge>, triangles: &List<[(Index<Node>, Vector3<f64>); 3], Triangle>) -> (Index<Triangle>, [(Index<Node>, Vector3<f64>); 3]) {
         let edge = self.structure[index].as_ref().unwrap();
         let triangle = triangles[edge.triangle].as_ref().unwrap();
-        let cps = self.subdivide(triangle);
-        // let [a,b,c] = if triangle[0].0 == edge.source && triangle[1].0 == edge.target {
-        //     [triangle[0], triangle[2], triangle[1]]
-        // } else if triangle[0].0 == edge.source && triangle[2].0 == edge.target {
-        //     [triangle[0], triangle[1], triangle[2]]
-        // } else if triangle[1].0 == edge.source && triangle[2].0 == edge.target {
-        //     [triangle[1], triangle[0], triangle[2]]
-        // } else if triangle[1].0 == edge.source && triangle[0].0 == edge.target {
-        //     [triangle[1], triangle[2], triangle[0]]
-        // } else if triangle[2].0 == edge.source && triangle[0].0 == edge.target {
-        //     [triangle[2], triangle[1], triangle[0]]
-        // } else {
-        //     [triangle[2], triangle[0], triangle[1]]
-        // };
         let [a, b, c] = [triangle.iter().find(|(i,_)| *i == edge.source).unwrap(), triangle.iter().find(|(i,_)| *i != edge.source && *i != edge.target).unwrap(), triangle.iter().find(|(i,_)| *i == edge.target).unwrap()];
         let coefficients = self.structure.get_coefficients(index);
         let o = Self::calculate_opposite_with_coefficient(coefficients.fixed_rows::<3>(0).clone_owned(), [a.1.into(),b.1.into(),c.1.into()]);
-        let o1 = Self::calculate_opposite_with_coefficient(coefficients.fixed_rows::<3>(0).clone_owned(), [a.1.clone().data.0[0], cps.iter().find(|(s,t,p)| *s == a.0 && *t == b.0).unwrap().2.data.0[0], cps.iter().find(|(s,t,p)| *s == a.0 && *t == c.0).unwrap().2.data.0[0]]);
-        let o2 = Self::calculate_opposite_with_coefficient(coefficients.fixed_rows::<3>(0).clone_owned(), [cps.iter().find(|(s,t,p)| *s == c.0 && *t == a.0).unwrap().2.data.0[0], cps.iter().find(|(s,t,p)| *s == c.0 && *t == b.0).unwrap().2.data.0[0], c.1.clone().data.0[0]]);
 
         let opp = self.structure[edge.opposite].as_ref().unwrap();
         let idx_opp = self.structure[opp.next].as_ref().unwrap().target;
@@ -94,7 +56,9 @@ impl<'p, TM: UncontractableMesh> ProjectiveStructureVisualisation<'p, TM> {
 
 
         loop {
+            // let (index, triangle) = self.calculate_opposite(idx_edge, &triangles);
             let (index, triangle) = self.calculate_opposite(idx_edge, &triangles);
+            // let triangle = triangle.map(|(n, c)| (n, c.normalize()));n
             if triangles[index].is_some() {
                 break;
             }
@@ -104,30 +68,58 @@ impl<'p, TM: UncontractableMesh> ProjectiveStructureVisualisation<'p, TM> {
 
         triangles
     }
-}
 
-impl<'p, TM: UncontractableMesh> VisualiseProjectiveStructure for ProjectiveStructureVisualisation<'p, TM> {
-    fn visualise(&self) -> MeshTriangleInfo {
+    pub fn get_visualisation(&self) -> List<[(Index<Node>, Vector3<f64>); 3], Triangle> {
         let mut queue = VecDeque::new();
         let [(a,_), (b,_), (c, _)] = self.base;
         let ab = self.structure.find_edge(a, b).unwrap();
-        let triangle = self.base.map(|(n, c)| (n, c.into()));
+        let mut finished_nodes: List<(), Node> = List::with_defaults(self.structure.nodes().len()); 
+        let mut triangles: List<[(Index<Node>, Vector3<f64>); 3], Triangle> = List::with_defaults(self.structure.coefficients.len());
+        let triangle = self.structure[ab].as_ref().unwrap().triangle.also(|triangle| {
+            triangles[*triangle] = Some(self.base.map(|(n, c)| (n, c.into()))/*.map(|(n,c): (_, Vector3<f64>)| (n, c.normalize()))*/);
+        });
+
         queue.push_back((a, ab, triangle));
         queue.push_back((b, self.structure[ab].as_ref().unwrap().next, triangle));
         queue.push_back((c, self.structure[ab].as_ref().unwrap().previous, triangle));
 
-        let mut triangles: Vec<[(Index<Node>, Vector3<f64>); 3]> = Vec::new();
-
         while let Some((node, edge, triangle)) = queue.pop_front() {
-            self.calculate_neighbours(node, edge, triangle).take()
+            finished_nodes[node] = Some(());
+            self.calculate_neighbours(node, edge, triangles[triangle].unwrap())
+                .enumerate_some()
+                // .map(|(i, t)| (i, t.map(|(n, c)| (n, c.normalize()))))
+                .for_each(|(i, t)| {
+                    if triangles[i].is_none() {
+                        triangles[i] = Some(*t);
+                    }
+                });
+            self.structure.collect_outgoing_edges_starting_with(edge)
                 .into_iter()
-                .filter_map(|i| i)
-                .for_each(|i| triangles.push(i));
+                .map(|i| self.structure[i].as_ref().unwrap().next)
+                .map(|i| {
+                    let edge = self.structure[i].as_ref().unwrap();
+                    (i, edge.source, edge.triangle)
+                })
+                .for_each(|(edge, node, triangle)| {
+                    if finished_nodes[node].is_none() {
+                        queue.push_back((node, edge, triangle));
+                    }
+                })
         }
+        triangles
+    }
+}
+
+impl<'p, TM: UncontractableMesh> VisualiseProjectiveStructure for ProjectiveStructureVisualisation<'p, TM> {
+    fn visualise(&self) -> MeshTriangleInfo {
+        let triangles = self.get_visualisation();
 
         let (triangles, nodes): (Vec<usize>, Vec<[f32; 3]>) = triangles
+            .take()
             .into_iter()
+            .filter_map(|i| i)
             .flatten()
+            // .map(|(i, t)| (i, t.normalize()))
             .enumerate()
             // .map(|(i, a)| (i, a.1.normalize().data.0[0].map(|it| it as f32)))
             .map(|(i, a)| (i, a.1.data.0[0].map(|it| it as f32)))

@@ -4,12 +4,14 @@ use apply::{Also, Apply};
 use bevy::{ecs::system::IntoSystem, math::Vec3};
 use itertools::Itertools;
 use levenberg_marquardt::{LeastSquaresProblem, LevenbergMarquardt};
+use minres::{GMRESSolver, MinResSolver};
 use nalgebra::{zero, ArrayStorage, ComplexField, Const, DMatrix, DVector, Dyn, Matrix3, Matrix4, Matrix4x1, Matrix4x3, MatrixMN, RowVector, SMatrix, SVector, ToTypenum, UninitVector, Vector2, Vector3, Vector4, Vector6, VectorN};
 
 use crate::{mesh::{Edge, Index, List, MeshData, MeshTriangleInfo, Node, Triangle, TriangleMesh, TriangleMeshHalfEdgeCollapse}, ClosedTriangleMesh};
 
 pub mod visualisation;
 pub mod structure;
+mod minres;
 
 #[derive(Debug, Clone, Copy)]
 pub enum RealNode {
@@ -74,6 +76,7 @@ impl Quad {
 
 trait CalculateCCoefficients {
     fn calculate_c_coefficients(&self) -> Vector3<f64>;
+    fn residual(&self, coefficents: Vector3<f64>) -> Vec<Vector3<f64>>;
 }
 
 impl CalculateCCoefficients for (Quad, Quad) {
@@ -85,12 +88,49 @@ impl CalculateCCoefficients for (Quad, Quad) {
         let matrix =  SMatrix::<f64, 8, 3>::from_row_iterator(upper.transpose().into_iter().chain(lower.transpose().into_iter()).cloned());
         println!("{matrix}");
         println!("{b}");
-        let qr = matrix.qr();
-        let coefficient = qr.r().solve_upper_triangular_unchecked(&(qr.q().transpose() * b));
+        let coefficient = matrix.svd(true, true).solve(&b, 1e-15).unwrap();
+        // let qr = matrix.qr();
+        // let coefficient = qr.r().solve_upper_triangular_unchecked(&(qr.q().transpose() * b));
         println!("residual: {}", (b - matrix * coefficient).norm());
         coefficient
     }
+
+    fn residual(&self, coefficents: Vector3<f64>) -> Vec<Vector3<f64>> {
+        let upper = Matrix4x3::from_columns(&[self.0.a, self.0.b, self.0.c]);
+        let lower = Matrix4x3::from_columns(&[self.1.a, self.1.b, self.1.c]);
+        let b = SMatrix::<f64, 8, 1>::from_row_iterator(self.0.d.into_iter().chain(self.1.d.into_iter()).cloned());
+        
+        let matrix =  SMatrix::<f64, 8, 3>::from_row_iterator(upper.transpose().into_iter().chain(lower.transpose().into_iter()).cloned());
+        let residual = matrix * coefficents - b;
+        vec![residual.fixed_rows::<3>(1).into(), residual.fixed_rows::<3>(5).into()]
+    }
 }
+
+impl CalculateCCoefficients for (Quad, Quad, Quad) {
+    fn calculate_c_coefficients(&self) -> Vector3<f64> {
+        let upper = Matrix4x3::from_columns(&[self.0.a, self.0.b, self.0.c]);
+        let middle = Matrix4x3::from_columns(&[self.1.a, self.1.b, self.1.c]);
+        let lower = Matrix4x3::from_columns(&[self.1.a, self.1.b, self.1.c]);
+        let b = SMatrix::<f64, 12, 1>::from_row_iterator(self.0.d.into_iter().chain(self.1.d.into_iter()).chain(self.2.d.into_iter()).cloned());
+        
+        let matrix =  SMatrix::<f64, 12, 3>::from_row_iterator(upper.transpose().into_iter().chain(middle.transpose().into_iter()).chain(lower.transpose().into_iter()).cloned());
+        let qr = matrix.qr();
+        let coefficient = qr.r().solve_upper_triangular_unchecked(&(qr.q().transpose() * b));
+        coefficient
+    }
+
+    fn residual(&self, coefficents: Vector3<f64>) -> Vec<Vector3<f64>> {
+        let upper = Matrix4x3::from_columns(&[self.0.a, self.0.b, self.0.c]);
+        let middle = Matrix4x3::from_columns(&[self.1.a, self.1.b, self.1.c]);
+        let lower = Matrix4x3::from_columns(&[self.1.a, self.1.b, self.1.c]);
+        let b = SMatrix::<f64, 12, 1>::from_row_iterator(self.0.d.into_iter().chain(self.1.d.into_iter()).chain(self.2.d.into_iter()).cloned());
+        
+        let matrix =  SMatrix::<f64, 12, 3>::from_row_iterator(upper.transpose().into_iter().chain(middle.transpose().into_iter()).chain(lower.transpose().into_iter()).cloned());
+        let residual = matrix * coefficents - b;
+        vec![residual.fixed_rows::<3>(1).into(), residual.fixed_rows::<3>(5).into(), residual.fixed_rows::<3>(9).into()]
+    }
+}
+
 
 pub struct SubdividedTriangle {
     pub a: Vector4<f64>,
@@ -224,10 +264,29 @@ impl ClosedTriangleMesh<SubdividedTriangleData> {
         let N = equations.mapping.len();
         let mut iteration = 0;
         let mut rescale = 0;
-        let mut matrix = DMatrix::from_diagonal_element(11 * N, 11 * N, 1.0f64).resize(19 * N, 19 * N, 0f64); // &equations.parameters.to_vec().map(|i| (i.abs()).recip())
+        // let mut matrix = DMatrix::from_diagonal_element(11 * N, 11 * N, 1.0f64).resize(19 * N, 19 * N, 0f64); // &equations.parameters.to_vec().map(|i| (i.abs()).recip())
         
         // Maybe only stay near initial cps and weights
-        // let mut matrix = DMatrix::from_diagonal_element(8 * N, 8 * N, 1.0f64).resize(19 * N, 19 * N, 0f64); // &equations.parameters.to_vec().map(|i| (i.abs()).recip())
+        let mut matrix = DMatrix::from_diagonal_element(8 * N, 8 * N, 1.0f64).resize(22 * N, 22 * N, 0f64); // &equations.parameters.to_vec().map(|i| (i.abs()).recip())
+        let iter = initial_param.points.iter().flatten().flat_map(|(_, c)| c.data.0[0]).chain((0..2*N).map(|i| 1f64));
+        let mut b = DVector::<f64>::from_iterator(8 * N, iter).resize_vertically(22 * N, 0f64);
+
+        let (interm, interv) = equations.get_interpolation_conditions();
+        matrix.view_mut((11 * N, 8 * N), (3 * N, 3 * N)).apply_mut(|view| {
+            interm.rows(0, 3 * N)
+                .iter()
+                .enumerate()
+                .for_each(|(index, row)| view[index] = *row);
+        });
+        matrix.view_mut((8 * N, 11 * N), (3 * N, 3 * N)).apply_mut(|view| {
+            interm.transpose()
+                .rows(0, 3 * N)
+                .iter()
+                .enumerate()
+                .for_each(|(index, row)| view[index] = *row);
+        });
+        b.as_mut_slice()[11*N..14*N].copy_from_slice(interv.as_slice());
+
         // let mut matrix = (DMatrix::from_diagonal_element(11 * N, 11 * N, 200f64 - 0.7f64 * equations.calculate().norm().recip())).resize(19 * N, 19 * N, 0f64);
         let mut stepsize = 1f64;
         // let mut b = DVector::from_element(19 * N, 0f64);
@@ -243,35 +302,44 @@ impl ClosedTriangleMesh<SubdividedTriangleData> {
             println!("iteration: {iteration}, points: {}\n", equations.parameters.points.iter().map(|it| it.iter().map(|c| format!("{:.4}, ", c.1)).join("")).join(", "));
             println!("iteration: {iteration}, weights: {}\n", equations.parameters.weights.iter().map(|it| it.iter().map(|c| format!("{:.4}, ", c.1)).join("")).join(", "));
             println!("iteration: {iteration}, coefficients: {}\n", equations.parameters.coefficients.iter().map(|it| it.iter().map(|c| format!("{:.4}, ", c)).join("")).join(", "));
-            let mut b = initial_param.to_vec().0.resize_vertically(19 * N, 0f64);
             // let mut b = equations.parameters.to_vec().0.resize_vertically(19 * N, 0f64);
             
+            #[cfg(feature = "rescale")] {
+                println!("rescaling");
+                b.as_mut_slice()[..6 * N].copy_from_slice(&equations.parameters.points.iter().flatten().flat_map(|(_, i)| i).cloned().collect_vec()[..]);
+            }
+            #[cfg(feature = "rescale")]
+            let rescale_initial = equations.parameters.to_vec();
+            #[cfg(not(feature = "rescale"))] 
+            let rescale_initial = initial_param.to_vec();
             // Maybe only stay near initial cps and weights
+            // let iter = initial_param.points.iter().flatten().flat_map(|(_, c)| c.data.0[0]).chain((0..2*N).map(|i| 1f64));
             // let iter = equations.parameters.points.iter().flatten().flat_map(|(_, c)| c.data.0[0]).chain((0..2*N).map(|i| 1f64));
             // let mut b = DVector::<f64>::from_iterator(8 * N, iter).resize_vertically(19 * N, 0f64);
             // let rescale_initial = equations.parameters.to_vec();
-            let rescale_initial = initial_param.to_vec();
             iteration = 0;
             stepsize = 1f64;
             let mut improvements = false;
+            equations.parameters = min.clone();
+            history.truncate(index_min + 1);
             
             while iteration < max_iterations {
                 let (linearization, q) = equations.linearization();
 
                 // Replace the sections of the matrix by the new C-Equations
-                matrix.view_mut((11 * N, 0), (8 * N, 11 * N)).apply(|mut matrix| {
+                matrix.view_mut((14 * N, 0), (8 * N, 11 * N)).apply(|mut matrix| {
                     for (index, row) in linearization.row_iter().enumerate() {
                         matrix.set_row(index, &row);
                     }
                 });
-                matrix.view_mut((0, 11 * N), (11 * N, 8 * N)).apply(|mut matrix| {
+                matrix.view_mut((0, 14 * N), (11 * N, 8 * N)).apply(|mut matrix| {
                     for (index, column) in linearization.transpose().column_iter().enumerate() {
                         matrix.set_column(index, &column);
                     }
                 });
                 // let b_slice = &mut b.data.as_mut_slice()[6*N..11*N];
                 // b_slice.copy_from_slice(&DVector::zeros(5 * N).as_slice());
-                let b_slice = &mut b.data.as_mut_slice()[11*N..19*N];
+                let b_slice = &mut b.data.as_mut_slice()[14*N..22*N];
                 b_slice.copy_from_slice(q.data.as_slice());
     
                 log::debug!("solution quality: {}", equations.calculate().norm());
@@ -280,6 +348,9 @@ impl ClosedTriangleMesh<SubdividedTriangleData> {
                 log::debug!("rank composite: {}", matrix.rank(1e-16));
                 log::debug!("rank D: {}", linearization.rank(1e-16));
                 let solution = CEquationParameters::from_vec(matrix.clone().qr().solve(&b).unwrap().rows(0, 11*N).into(), maps.clone());
+                // let guess = equations.parameters.to_vec().0.resize_vertically(22 * N, 1f64);
+                // let solution = CEquationParameters::from_vec(matrix.clone().solve(&b, &guess, 1000, 1e-12).rows(0, 11*N).into(), maps.clone());
+                // let solution = CEquationParameters::from_vec(matrix.clone().gmres(&b, &guess, 1000, 1e-12).rows(0, 11*N).into(), maps.clone());
 
                 log::debug!("error to q with x_i: {}", (linearization * solution.to_vec().0 - q).norm());
                 log::info!("norm (x_i - x_0): {}", (solution.to_vec().0 - &initial).norm());
@@ -297,19 +368,24 @@ impl ClosedTriangleMesh<SubdividedTriangleData> {
                     log::info!("Increasing stepsize: {}", stepsize);
                     improvements = true;
                 } else if equations.calculate().norm() < equations.evaluate_parameter(&solution).norm() {
-                    match strategy {
-                        CalculationProjectiveStructureStepsize::Break(threshold) => if stepsize < threshold { break } else { stepsize *= 0.5f64 },
-                        CalculationProjectiveStructureStepsize::Reset(threshold) => if stepsize < threshold { stepsize = 1f64; } else { stepsize *= 0.5f64 }
+                    #[cfg(feature = "stepsize")] {
+                        match strategy {
+                            CalculationProjectiveStructureStepsize::Break(threshold) => if stepsize < threshold { break } else { stepsize *= 0.5f64 },
+                            CalculationProjectiveStructureStepsize::Reset(threshold) => if stepsize < threshold { stepsize = 1f64; } else { stepsize *= 0.5f64 }
+                        }
+                        log::info!("Decreasing stepsize: {}", stepsize);
+                        equations.parameters = (solution.clone() - &equations.parameters) * stepsize + equations.parameters;
                     }
-                    log::info!("Decreasing stepsize: {}", stepsize);
-                    // let factor = (equations.calculate().norm() / equations.evaluate_parameter(&solution).norm()).sqrt();
-                    // equations.parameters = (previous_params.clone() + solution.clone() - &equations.parameters - &equations.parameters) * factor * stepsize + equations.parameters;
-                    equations.parameters = (solution.clone() - &equations.parameters) * stepsize + equations.parameters;
+                    #[cfg(not(feature = "stepsize"))] {
+                        equations.parameters = solution;
+                    }
                 } else {
                     previous_params = equations.parameters.clone();
                     equations.parameters = solution;
-                    stepsize = 1f64.min(2f64 * stepsize);
-                    log::info!("Increasing stepsize: {}", stepsize);
+                    #[cfg(feature = "stepsize")] {
+                        stepsize = 1f64.min(2f64 * stepsize);
+                        log::info!("Increasing stepsize: {}", stepsize);    
+                    }
                     improvements = true;
                 }
                 history.push(equations.parameters.clone());
@@ -335,10 +411,16 @@ impl ClosedTriangleMesh<SubdividedTriangleData> {
                 log::info!("No new improvements after rescale: {rescale}");
                 // break;
             }
-            rescale += 1;
+            #[cfg(feature = "rescale")] {
+                rescale += 1;
+            }
+            #[cfg(not(feature = "rescale"))] {
+                break;
+            }
         }
 
         equations.parameters = min;
+        println!("min: {index_min}");
 
         println!("initial:      points: {}\n", initial_param.points.iter().map(|it| it.iter().flat_map(|c| c.1.data.0[0]).map(|c| format!("{:.4}, ", c)).join("")).join(", "));
         println!("initial:      weights: {}\n", initial_param.weights.iter().map(|it| it.iter().map(|c| format!("{:.4}, ", c.1)).join("")).join(", "));
@@ -399,8 +481,8 @@ impl std::ops::Add for CEquationParameters {
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             coefficients: self.coefficients.into_iter().zip(rhs.coefficients.into_iter()).map(|(a, b)| a + b).collect_vec(),
-            points: self.points.into_iter().zip(rhs.points.into_iter()).map(|(a, b)| [(a[0].0, a[0].1 + b[0].1), (a[1].0, a[1].1 + b[1].1)]).collect_vec(),
-            weights: self.weights.into_iter().zip(rhs.weights.into_iter()).map(|(a, b)| [(a[0].0, a[0].1 + b[0].1), (a[1].0, a[1].1 + b[1].1)]).collect_vec()
+            points: self.points.into_iter().zip(rhs.points.into_iter()).map(|(a, b)| [(a[0].0, a[0].1 + if b[0].0 == a[0].0 { b[0].1 } else { b[1].1 }), (a[1].0, a[1].1 + if b[1].0 == a[1].0 { b[1].1 } else { b[0].1 })]).collect_vec(),
+            weights: self.weights.into_iter().zip(rhs.weights.into_iter()).map(|(a, b)| [(a[0].0, a[0].1 + if b[0].0 == a[0].0 { b[0].1 } else { b[1].1 }), (a[1].0, a[1].1 + if b[1].0 == a[1].0 { b[1].1 } else { b[0].1 })]).collect_vec()
         }
     }
 }
@@ -410,8 +492,8 @@ impl std::ops::Sub for CEquationParameters {
     fn sub(self, rhs: Self) -> Self::Output {
         Self {
             coefficients: self.coefficients.into_iter().zip(rhs.coefficients.into_iter()).map(|(a, b)| a - b).collect_vec(),
-            points: self.points.into_iter().zip(rhs.points.into_iter()).map(|(a, b)| [(a[0].0, a[0].1 - b[0].1), (a[1].0, a[1].1 - b[1].1)]).collect_vec(),
-            weights: self.weights.into_iter().zip(rhs.weights.into_iter()).map(|(a, b)|  [(a[0].0, a[0].1 - b[0].1), (a[1].0, a[1].1 - b[1].1)]).collect_vec()
+            points: self.points.into_iter().zip(rhs.points.into_iter()).map(|(a, b)| [(a[0].0, a[0].1 - if b[0].0 == a[0].0 { b[0].1 } else { b[1].1 }), (a[1].0, a[1].1 - if b[1].0 == a[1].0 { b[1].1 } else { b[0].1 })]).collect_vec(),
+            weights: self.weights.into_iter().zip(rhs.weights.into_iter()).map(|(a, b)|  [(a[0].0, a[0].1 - if b[0].0 == a[0].0 { b[0].1 } else { b[1].1 }), (a[1].0, a[1].1 - if b[1].0 == a[1].0 { b[1].1 } else { b[0].1 })]).collect_vec()
         }
     }
 }
@@ -421,8 +503,8 @@ impl std::ops::Sub<&Self> for CEquationParameters {
     fn sub(self, rhs: &Self) -> Self::Output {
         Self {
             coefficients: self.coefficients.into_iter().zip(rhs.coefficients.iter()).map(|(a, b)| a - b).collect_vec(),
-            points: self.points.into_iter().zip(rhs.points.iter()).map(|(a, b)| [(a[0].0, a[0].1 - b[0].1), (a[1].0, a[1].1 - b[1].1)]).collect_vec(),
-            weights: self.weights.into_iter().zip(rhs.weights.iter()).map(|(a, b)|  [(a[0].0, a[0].1 - b[0].1), (a[1].0, a[1].1 - b[1].1)]).collect_vec()
+            points: self.points.into_iter().zip(rhs.points.iter()).map(|(a, b)| [(a[0].0, a[0].1 - if b[0].0 == a[0].0 { b[0].1 } else { b[1].1 }), (a[1].0, a[1].1 - if b[1].0 == a[1].0 { b[1].1 } else { b[0].1 })]).collect_vec(),
+            weights: self.weights.into_iter().zip(rhs.weights.iter()).map(|(a, b)|  [(a[0].0, a[0].1 - if b[0].0 == a[0].0 { b[0].1 } else { b[1].1 }), (a[1].0, a[1].1 - if b[1].0 == a[1].0 { b[1].1 } else { b[0].1 })]).collect_vec()
         }
     }
 }
@@ -490,6 +572,29 @@ impl<'M, MD: MeshData, TM: TriangleMesh<Data = MD>> CEquations<'M, TM> {
     fn find_mapping_within(edge: Index<Edge>, mapping: &Vec<(Index<Edge>, Index<Edge>)>) -> usize {
         mapping.iter().enumerate().find(|(_, j)| j.0 == edge || j.1 == edge).unwrap().0
     }
+
+    pub fn get_interpolation_conditions(&self) -> (DMatrix<f64>, DVector<f64>) {
+        let len = self.mapping.len();
+        let mut matrix = DMatrix::zeros(3 * len, 3 * len);
+        let mut vec = DVector::zeros(3 * len);
+
+        for (index, edge) in self.mesh.current_edges_undirected() {
+            let i = self.find_mapping(index);
+            let (a, c) = (edge.source, edge.target);
+            let d = self.mesh[edge.opposite].as_ref().unwrap().next.apply(|it| self.mesh[it].as_ref().unwrap().target);
+            let b = self.mesh[edge.previous].as_ref().unwrap().source;
+            let [a,b,c,d] = [a,b,c,d].map(|it| self.mesh[it].as_ref().unwrap().coordinates);
+
+            vec.as_mut_slice()[(3 * i)..(3 * i + 3)].copy_from_slice(&d[..]);
+            matrix.view_mut((3 * i, 3 * i), (3, 3)).apply_mut(|view| {
+                view.set_column(0, &a.into());
+                view.set_column(1, &b.into());
+                view.set_column(2, &c.into());
+            })
+        }
+
+        (matrix, vec)
+    }
 }
 
 impl<'M, TM: TriangleMesh<Data = SubdividedTriangleData>> CEquations<'M, TM> {
@@ -506,9 +611,10 @@ impl<'M, TM: TriangleMesh<Data = SubdividedTriangleData>> CEquations<'M, TM> {
                 continue;
             }
             mapping.push((index, edge.opposite));
-            let data = mesh.triangle_data()[edge.triangle].as_ref().unwrap();
-            let (a,b) = data.get_points(index);
-            points.push([(edge.source, a.into()), (edge.target, b.into())]);
+            let [a,c]: [Vector3<f64>; 2] = [edge.source, edge.target].map(|i| mesh[i].as_ref().unwrap().coordinates.into());
+            // let data = mesh.triangle_data()[edge.triangle].as_ref().unwrap();
+            // let (a,b) = data.get_points(index);
+            points.push([(edge.source, a + (c - a)/3f64), (edge.target, a + 2f64 * (c - a)/3f64)]);
             weights.push([(edge.source, 1f64), (edge.target, 1f64)]);
         }
 
@@ -519,8 +625,28 @@ impl<'M, TM: TriangleMesh<Data = SubdividedTriangleData>> CEquations<'M, TM> {
             if coefficients.get(i).is_some() {
                 continue;
             }
-            let quads = Self::get_weighted_quads_for_edge_with((&points, &weights), &mapping, mesh, index, &edge);
-            coefficients.push(quads.calculate_c_coefficients());
+            #[cfg(feature = "init_only_quads")] {
+                let quads = Self::get_weighted_quads_for_edge_with((&points, &weights), &mapping, mesh, index, &edge);
+                coefficients.push(quads.calculate_c_coefficients());
+            }
+            #[cfg(feature = "init_only_inter")] {
+                let (a, c) = (edge.source, edge.target);
+                let d = mesh[edge.opposite].as_ref().unwrap().next.apply(|it| mesh[it].as_ref().unwrap().target);
+                let b = mesh[edge.previous].as_ref().unwrap().source;
+                let [a,b,c,d] = [a,b,c,d].map(|it| mesh[it].as_ref().unwrap().coordinates);
+                coefficients.push(Matrix3::from_column_slice([a,b,c].as_flattened()).qr().solve(&d.into()).unwrap());
+            }
+            #[cfg(feature = "init_inter_quad")] {
+                let (a, c) = (edge.source, edge.target);
+                let d = mesh[edge.opposite].as_ref().unwrap().next.apply(|it| mesh[it].as_ref().unwrap().target);
+                let b = mesh[edge.previous].as_ref().unwrap().source;
+                let [a,b,c,d] = [a,b,c,d].map(|it| mesh[it].as_ref().unwrap().coordinates);
+                let outer = Quad::from_coordinates(RealNode::A, a, b, c, d);
+                let quads = Self::get_weighted_quads_for_edge_with((&points, &weights), &mapping, mesh, index, &edge);
+                let coefficent = (quads.0, quads.1, outer).calculate_c_coefficients();
+                coefficients.push(coefficent);
+            }
+
         }
 
         Self {
@@ -553,16 +679,16 @@ impl<'M, TM: TriangleMesh<Data = SubdividedTriangleData>> CEquations<'M, TM> {
 
         let (l_a, u_c): (Vector3<f64>, Vector3<f64>) = (mesh[edge.source].as_ref().unwrap().coordinates.into(), mesh[edge.target].as_ref().unwrap().coordinates.into());
         // let ((w_lc, l_c), (w_ua, u_a)) = Self::get_weighted_points(index, mapping, points, weights);
-        let ((w_d, l_c), (w_b, u_a)) = Self::get_weighted_points(index, mesh[index].as_ref().unwrap(), mapping, points, weights);
+        let ((w_lc, l_c), (w_ua, u_a)) = Self::get_weighted_points(index, mesh[index].as_ref().unwrap(), mapping, points, weights);
 
-        let find_ep = |index: Index<Edge>, edge: &Edge, node: &Vector3<f64>| {
+        let find_ep = |index: Index<Edge>, node: Index<Node>| {
         // let find_ep = |index: Index<Edge>| {^
             // Self::get_weighted_points(index, mapping, points, weight^s).0
             let map = Self::find_mapping_within(index, mapping);
             let (_first, _second) = points[map].apply(|it| (it[0], it[1]));
             let (w_f, w_s) = weights[map].apply(|it| (it[0], it[1]));
           
-            if edge.source == _first.0 {
+            if node == _first.0 {
                 (w_f, _first.1)
             } else {
                 (w_s, _second.1) 
@@ -575,14 +701,14 @@ impl<'M, TM: TriangleMesh<Data = SubdividedTriangleData>> CEquations<'M, TM> {
         // let (l_b, w_lb) = find_ep(opposite.next, &l_a);
         // let (u_b, w_ub) = find_ep(opposite.previous, &u_c);
 
-        let (w_ld, l_d) = find_ep(edge.previous, edge, &l_a);
-        let (w_ud, u_d) = find_ep(edge.next, edge, &u_c);
-        let (w_lb, l_b) = find_ep(opposite.next, edge, &l_a);
-        let (w_ub, u_b) = find_ep(opposite.previous, edge, &u_c);
+        let (w_ld, l_d) = find_ep(opposite.next, edge.source);
+        let (w_ud, u_d) = find_ep(opposite.previous, edge.target);
+        let (w_lb, l_b) = find_ep(edge.previous, edge.source);
+        let (w_ub, u_b) = find_ep(edge.next, edge.target);
 
         let (mut u, mut l) = (Quad::from(RealNode::C, u_a, u_b, u_c, u_d), Quad::from(RealNode::A, l_a, l_b, l_c, l_d));
-        u.set_weights(w_b, w_ub.1, 1.0f64, w_ud.1);
-        l.set_weights(1.0f64, w_lb.1, w_d, w_ld.1);
+        u.set_weights(w_ua, w_ub.1, 1.0f64, w_ud.1);
+        l.set_weights(1.0f64, w_lb.1, w_lc, w_ld.1);
         // u.set_weights(1f64, w_d, 1.0f64, w_d);
         // l.set_weights(1.0f64, w_d, 1f64, w_d);
         (u, l)
@@ -837,7 +963,7 @@ mod tests {
         let mut builder = MeshBuilder::default();
         let nodes: Vec<_> = vec![
             [-1.0f64, 0f64, 0f64],
-            [1.0f64, 0f64, 0f64],
+            [1.0f64, 1f64, 1f64],
             [0f64,1.0f64, 0f64],
             [0f64, 0f64, 1.0f64],
         ].into_iter().map(|node| {
@@ -929,17 +1055,68 @@ mod tests {
     }
 
     #[test]
-    pub fn subdivide_tetraeder() {
+    pub fn subdivide_correct() {
         let mesh = tetraeder();
-        let submesh = mesh.subdivide();
+        let mut submesh = mesh.subdivide();
+        let equations = submesh.calculate_projective_structure(1e-9, 0, 0, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        for (index, edge) in equations.mesh.current_edges_undirected() {
+            let quads = equations.get_weighted_quads_for_edge(index, &edge);
+            let b = equations.mesh[edge.previous].as_ref().unwrap().source;
+            let d = equations.mesh[edge.opposite].as_ref().unwrap().apply(|it| equations.mesh[it.next].as_ref().unwrap().target);
+            let [a,b,c,d,]: [Vector3<f64>; 4] = [edge.source, b, edge.target, d].map(|it| equations.mesh[it].as_ref().unwrap().coordinates.into());
+
+            for quad in [quads.0, quads.1] {
+                match quad.real_node {
+                    RealNode::A => {
+                        assert_eq!(quad.a_weightless(), a);
+                        assert!((quad.c_weightless() - (a + 1f64/3f64 * (c - a))).norm() < 1e-9);
+                        assert!((quad.b_weightless() - (a + 1f64/3f64 * (b - a))).norm() < 1e-9);
+                        assert!((quad.d_weightless() - (a + 1f64/3f64 * (d - a))).norm() < 1e-9);
+                    },
+                    RealNode::C => {
+                        assert_eq!(c, quad.c_weightless());
+                        assert!((quad.a_weightless() - (c + 1f64/3f64 * (a - c))).norm() < 1e-9);
+                        assert!((quad.b_weightless() - (c + 1f64/3f64 * (b - c))).norm() < 1e-9);
+                        assert!((quad.d_weightless() - (c + 1f64/3f64 * (d - c))).norm() < 1e-9);
+                    }
+                }
+            }
+        }
     }
 
     #[test]
     pub fn good_init_values() {
         let mesh = icosahedron();
         let mut submesh = mesh.subdivide();
-        let equations = submesh.calculate_projective_structure(1e-9, 100, 0, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
-        assert!(equations.calculate().norm() < 1e-9)
+        let equations = submesh.calculate_projective_structure(1e-9, 0, 0, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        for (index, edge) in equations.mesh.current_edges_undirected() {
+            let coefficients = equations.parameters.coefficients[equations.find_mapping(index)].fixed_rows::<3>(0);
+            let quads = equations.get_weighted_quads_for_edge(index, &edge);
+            let quad_coeff = quads.calculate_c_coefficients();
+            assert_eq!(coefficients, quad_coeff);
+            for res in quads.residual(coefficients.into()) {
+                assert_relative_eq!(SVector::zeros(), res, epsilon = 0.5f64);
+            }
+            let tolerance: f64 = quads.residual(coefficients.into()).into_iter().map(|res| res.norm()).sum();
+            let b = equations.mesh[edge.previous].as_ref().unwrap().source;
+            let d = equations.mesh[edge.opposite].as_ref().unwrap().apply(|it| equations.mesh[it.next].as_ref().unwrap().target);
+            let [a,b,c,d,] = [edge.source, b, edge.target, d].map(|it| equations.mesh[it].as_ref().unwrap().coordinates);
+            let coefficients = (quads.0, quads.1, Quad::from_coordinates(RealNode::A, a, b, c, d)).calculate_c_coefficients();
+            // assert!((coefficients - quad_coeff).norm() < 0.1f64);
+
+            let interpolation = SMatrix::<f64, 3, 3>::from_column_slice([a,b,c].as_flattened()).insert_row(0, 1f64) * coefficients;
+            let interpolation: Vector3<f64> = interpolation.fixed_rows::<3>(0).into();
+            let d: Vector3<f64> = d.into();
+
+            // assert!((interpolation - d).norm() < tolerance, "d: {d:?}, inter: {interpolation:?}, tolerance: {tolerance}, error: {}", (interpolation - d).norm());
+
+
+            let interpolation = SMatrix::<f64, 3, 3>::from_column_slice([a,b,c].as_flattened()).insert_row(0, 1f64) * quad_coeff;
+            let interpolation: Vector3<f64> = interpolation.fixed_rows::<3>(0).into();
+            let d: Vector3<f64> = d.into();
+
+            assert!((interpolation - d).norm() < tolerance, "d: {d:?}, inter: {interpolation:?}, tolerance: {tolerance}, error: {}", (interpolation - d).norm());
+        }
     }
 
     #[test]
@@ -1030,6 +1207,8 @@ mod tests {
             let matrix = structure.point_weight_matrix_of_edge(index, &edge);
             let coefficients = structure.parameters.coefficients[structure.find_mapping(index)];
             assert_relative_eq!(SVector::zeros(), matrix * coefficients, epsilon = 1e-12);
+
+            // Make sure that the corners are interpolated as well
             let b = structure.mesh[edge.previous].as_ref().unwrap().source;
             let d = structure.mesh[edge.opposite].as_ref().unwrap().apply(|it| structure.mesh[it.next].as_ref().unwrap().target);
             let points = [edge.source, b, edge.target].map(|it| structure.mesh[it].as_ref().unwrap().coordinates);
@@ -1042,7 +1221,33 @@ mod tests {
         pretty_env_logger::init();
         let mesh = cube();
         let mut submesh = mesh.subdivide();
-        let structure = submesh.calculate_projective_structure(1e-14, 10000, 1, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        let structure = submesh.calculate_projective_structure(1e-15, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        for (index, edge) in structure.mesh.current_edges_undirected() {
+            let matrix = structure.point_weight_matrix_of_edge(index, &edge);
+            let coefficients = structure.parameters.coefficients[structure.find_mapping(index)];
+            assert_relative_eq!(SVector::zeros(), matrix * coefficients, epsilon = 1e-12);
+
+            // Make sure that the corners are interpolated as well
+            let b = structure.mesh[edge.previous].as_ref().unwrap().source;
+            let d = structure.mesh[edge.opposite].as_ref().unwrap().apply(|it| structure.mesh[it.next].as_ref().unwrap().target);
+            let points = [edge.source, b, edge.target].map(|it| structure.mesh[it].as_ref().unwrap().coordinates);
+            assert_relative_eq!(SVector::<f64, 3>::from(structure.mesh[d].as_ref().unwrap().coordinates).insert_row(0, 1f64), SMatrix::<f64, 3, 3>::from_column_slice(points.as_flattened()).insert_row(0, 1f64) * coefficients.fixed_rows::<3>(0), epsilon = 1e-9);
+        }
+    }
+
+    #[test]
+    pub fn projective_structure_correct_circular_condition() {
+        pretty_env_logger::init();
+        let mesh = cube();
+        let mut submesh = mesh.subdivide();
+        let structure = submesh.calculate_projective_structure(1e-14, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
+        // let circle = structure.mesh.collect_outgoing_edges(mesh.nodes[0]);
+        // let mut x = structure.mesh[circle[0]].as_ref().unwrap().previous.apply(|it| structure.mesh[it].as_ref.unwrap().source).apply(|it| structure.mesh[it].as_ref().unwrap().coordinates);
+        // let r = x.clone();
+        // for edge in circle {
+        //     x = structure.
+        // }
+
         for (index, edge) in structure.mesh.current_edges_undirected() {
             let matrix = structure.point_weight_matrix_of_edge(index, &edge);
             let coefficients = structure.parameters.coefficients[structure.find_mapping(index)];
@@ -1055,7 +1260,7 @@ mod tests {
         pretty_env_logger::init();
         let mesh = icosahedron();
         let mut submesh = mesh.subdivide();
-        let structure = submesh.calculate_projective_structure(1e-15, 10000, 1, CalculationProjectiveStructureStepsize::Reset(0.125f64)).0;
+        let structure = submesh.calculate_projective_structure(1e-14, 100, 5, CalculationProjectiveStructureStepsize::Break(0.125f64)).0;
         for (index, edge) in structure.mesh.current_edges_undirected() {
             let matrix = structure.point_weight_matrix_of_edge(index, &edge);
             let coefficients = structure.parameters.coefficients[structure.find_mapping(index)];

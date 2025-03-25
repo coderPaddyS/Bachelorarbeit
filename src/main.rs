@@ -38,7 +38,7 @@ impl InnerType {
         match self {
             InnerType::Mesh(mesh) => mesh.uncontract_edge(info),
             InnerType::ProjectiveStructure(structure) => structure.uncontract_edge(info),
-            InnerType::ControlNetProjectiveStructure { structure, .. } => (),
+            InnerType::ControlNetProjectiveStructure { structure, .. } => structure.uncontract_edge(info),
             InnerType::UncontractableProjectiveStructure(structure) => structure.uncontract_edge(info)
         }
     }
@@ -47,7 +47,7 @@ impl InnerType {
         match self {
             InnerType::Mesh(mesh) => mesh.uncontract_next_edge(|_, _| {}),
             InnerType::ProjectiveStructure(structure) => structure.uncontract_next_edge(|_, _| {}),
-            InnerType::ControlNetProjectiveStructure { structure, .. } => (),
+            InnerType::ControlNetProjectiveStructure { structure , ..} => structure.uncontract_next_edge(|_, _| {}),
             InnerType::UncontractableProjectiveStructure(structure) => structure.uncontract_next_edge(|_, _| {})
         }
     }
@@ -350,10 +350,21 @@ fn collapse_edge(
             }
             // println!("contraction list: {:?}", orbifold.contraction_order.clone().into_sorted_iter().collect::<Vec<_>>());
         }
+        if input.key_code == KeyCode::KeyM && input.state  == ButtonState::Released {
+            if let InnerType::Mesh(orbmesh) = &mut orbifold.0 {
+                println!("contracting max!");
+                orbmesh.contract_max();                
+                mesh.0 = meshes.add(orbifold.build_mesh())
+            }
+            // println!("contraction list: {:?}", orbifold.contraction_order.clone().into_sorted_iter().collect::<Vec<_>>());
+        }
         if input.key_code == KeyCode::KeyU && input.state  == ButtonState::Released {
             println!("uncontracting!");
             orbifold.uncontract_next_edge();
-            mesh.0 = meshes.add(orbifold.build_mesh())
+            if let InnerType::ControlNetProjectiveStructure { mapping, structure, history, current } = &mut orbifold.0 {
+                orbifold.0 = InnerType::UncontractableProjectiveStructure(structure.clone())
+            }
+            mesh.0 = meshes.add(orbifold.build_mesh());      
         }
         if input.key_code == KeyCode::KeyP && input.state  == ButtonState::Released {
             if let InnerType::Mesh(orbmesh) = &orbifold.0 {
@@ -365,7 +376,7 @@ fn collapse_edge(
                 // });
                 let (mapping, structure, history) = orbmesh.clone()
                     .subdivide()
-                    .calculate_projective_structure(1e-9, 15, 8, CalculationProjectiveStructureStepsize::Break(0.125f64))
+                    .calculate_projective_structure(1e-9, 5, 1, CalculationProjectiveStructureStepsize::Break(0.125f64))
                     .apply(|(s, h)| (s.mapping.clone(), ProjectiveStructure::new(s), h));
                 
                 ProjectiveStructureVisualisation::new(&structure).visualise().apply(|info| mesh.0 = meshes.add(to_bevy_mesh(info)));
@@ -405,6 +416,9 @@ fn collapse_edge(
             } else if let InnerType::ProjectiveStructure(structure) = &orbifold.0 {
                 println!("saving projective structure!");
                 structure.clone().save_to_dir(&mut PathBuf::from("./output/"), "orbifold");
+            } else if let InnerType::ControlNetProjectiveStructure { structure, ..} = &orbifold.0 {
+                println!("saving projective structure!");
+                structure.clone().save_to_dir(&mut PathBuf::from("./output/"), "orbifold");
             }
         }
         if input.key_code == KeyCode::KeyE && input.state  == ButtonState::Released {
@@ -415,7 +429,8 @@ fn collapse_edge(
         if input.key_code == KeyCode::KeyN && input.state  == ButtonState::Released {
             println!("loading projective structure via mesh and coefficients!");
             // orbifold.0 = InnerType::ProjectiveStructure(ProjectiveStructure::restore_from_dir(&mut PathBuf::from("./output/"), "orbifold"));
-            orbifold.0 = InnerType::ProjectiveStructure(ProjectiveStructure::restore_from_dir_by_cp(&mut PathBuf::from("./output/"), "orbifold", 4));
+            // orbifold.0 = InnerType::ProjectiveStructure(ProjectiveStructure::restore_from_dir(&mut PathBuf::from("./output/"), "orbifold", 4));
+            orbifold.0 = InnerType::ProjectiveStructure(ProjectiveStructure::restore_from_dir(&mut PathBuf::from("./output/"), "orbifold"));
             mesh.0 = meshes.add(orbifold.build_mesh())
         }
     }
@@ -431,11 +446,11 @@ fn setup(
     
     let mut builder = ba::mesh::MeshBuilder::default();
     let nodes: Vec<_> = vec![
-        [2.0f32,1.0f32,1.0f32],
-        [2.0f32,1.0f32,-1.0f32],
+        [1.0f32,1.0f32,1.0f32],
+        [1.0f32,1.0f32,-1.0f32],
         [1.0f32,-1.0f32,1.0f32],
         [1.0f32,-1.0f32,-1.0f32],
-        [-0.5f32,1.0f32,1.0f32],
+        [-1f32,1.0f32,1.0f32],
         [-1.0f32,1.0f32,-1.0f32],
         [-1.0f32,-1.0f32,1.0f32],
         [-1.0f32,-1.0f32,-1.0f32],

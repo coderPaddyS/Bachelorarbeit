@@ -125,6 +125,11 @@ pub trait TriangleMesh:
             self[it.opposite].as_ref().unwrap().next
         })
     }
+    fn next_outgoing_using(edges: &List<Edge>, index: Index<Edge>) -> Index<Edge> {
+        edges[index].as_ref().unwrap().apply(|it| {
+            edges[it.opposite].as_ref().unwrap().next
+        })
+    }
     fn collect_outgoing_edges(&self, index: Index<Node>) -> Vec<Index<Edge>> {
         self.collect_outgoing_edges_starting_with(self[index].as_ref().unwrap().outgoing[0])
     }
@@ -133,6 +138,16 @@ pub trait TriangleMesh:
         let mut outgoing = vec![edge];
         while edge != starting_edge {
             edge = self.next_outgoing(edge);
+            outgoing.push(edge);
+        }
+        outgoing
+    }
+
+    fn collect_outgoing_edges_starting_with_using(edges: &List<Edge>, starting_edge: Index<Edge>) -> Vec<Index<Edge>> {
+        let mut edge = Self::next_outgoing_using(edges, starting_edge);
+        let mut outgoing = vec![edge];
+        while edge != starting_edge {
+            edge = Self::next_outgoing_using(edges, edge);
             outgoing.push(edge);
         }
         outgoing
@@ -147,6 +162,7 @@ pub trait UncontractableMesh: TriangleMesh {
 pub trait ContractableMesh: TriangleMesh {
     fn contract_edge(&mut self, index: Index<Edge>) -> &<<Self as TriangleMesh>::Data as MeshData>::CollapseInfoOutput;
     fn contract_next_edge(&mut self) -> &<<Self as TriangleMesh>::Data as MeshData>::CollapseInfoOutput;
+    fn contract_max(&mut self);
 }
 
 #[derive(Clone)]
@@ -938,6 +954,12 @@ where
         let next = self.contraction_order.pop_min();
         self.contract_edge(next.unwrap().0)
     }
+
+    fn contract_max(&mut self) {
+        while let Some(edge) = self.contraction_order.pop_min() {
+            self.contract_edge(edge.0);
+        }
+    }
 }
 
 impl<TD> UncontractableMesh for ClosedTriangleMesh<TD> 
@@ -1385,6 +1407,13 @@ mod tests {
             .filter(|(_, facette)| facette.as_ref().cloned().map(|facette| facette.corners.contains(&0.into())).unwrap_or(false))
             .collect::<Vec<_>>();
         assert!(facettes_with_zero.is_empty(), "facettes containing zero: {:?}", facettes_with_zero);
+        Ok(())
+    }
+
+    #[test]
+    fn cube_max_hec() -> Result<(), MeshBuilderError> {
+        let mut mesh = cube();
+        mesh.contract_max();
         Ok(())
     }
 
